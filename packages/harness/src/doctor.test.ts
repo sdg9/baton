@@ -379,4 +379,29 @@ describe("runDoctor — soft env/plugin checks", () => {
       rmSync(dir, { recursive: true, force: true });
     }
   });
+
+  it("version-drift passes when installed version matches plugin pin", async () => {
+    const dir = makeTempDir();
+    try {
+      const local = join(dir, "node_modules", "@baton-tools", "harness");
+      mkdirSync(local, { recursive: true });
+      writeFileSync(
+        join(local, "package.json"),
+        JSON.stringify({ name: "@baton-tools/harness", version: "1.0.0" }),
+      );
+      const skillsDir = join(local, "plugin", "skills", "autonomous-harness");
+      mkdirSync(skillsDir, { recursive: true });
+      writeFileSync(
+        join(skillsDir, "SKILL.md"),
+        "Run `npx -y -p @baton-tools/harness@1.0.0 baton-harness status <story>`.\n",
+      );
+      const report = await runDoctor(dir);
+      const drift = report.checks.find((c) => c.name === "version-drift");
+      expect(drift?.tier).toBe("soft");
+      expect(drift?.status).toBe("pass");
+      expect(drift?.message).toMatch(/1\.0\.0/);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
 });

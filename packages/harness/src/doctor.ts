@@ -654,7 +654,7 @@ async function checkVersionDrift(ctx: DoctorContext): Promise<CheckResult | null
     };
   }
   const skill = readFileSync(skillPath, "utf8");
-  const match = skill.match(/@baton-tools\/harness@([0-9]+\.[0-9]+\.[0-9]+[^ )]*)/);
+  const match = skill.match(/@baton-tools\/harness@([0-9]+\.[0-9]+\.[0-9]+(?:[-+][0-9A-Za-z.\-]+)?)/);
   if (!match) {
     return {
       name: "version-drift",
@@ -724,6 +724,8 @@ export async function runDoctor(
     checks.push(await runOne(check, ctx));
   }
   // version-drift is conditional — emit only when a local install exists.
+  // Bypasses runOne so a thrown error becomes soft/warn instead of hard/fail
+  // (runOne's default behavior is hard/fail for any uncaught throw).
   const drift = await checkVersionDrift(ctx).catch((err: unknown) => ({
     name: "version-drift",
     tier: "soft" as CheckTier,
