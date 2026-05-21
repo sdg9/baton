@@ -1,0 +1,241 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$ref": "#/definitions/HarnessConfig",
+  "definitions": {
+    "HarnessConfig": {
+      "type": "object",
+      "properties": {
+        "openspecDir": {
+          "type": "string"
+        },
+        "worktreeDir": {
+          "type": "string"
+        },
+        "logDir": {
+          "type": "string"
+        },
+        "verification": {
+          "type": "object",
+          "properties": {
+            "typecheck": {
+              "type": "string"
+            },
+            "unit": {
+              "type": "string"
+            },
+            "e2e": {
+              "type": "string"
+            },
+            "lint": {
+              "type": "string"
+            },
+            "unitFull": {
+              "type": "string",
+              "description": "Optional full-suite unit command. Used by `verify-all --full` (and `merge-to-main`) to run the slow CLI-integration tests that the per-gate `unit` command skips for speed. Falls back to `unit` when absent."
+            }
+          },
+          "required": [
+            "typecheck",
+            "unit",
+            "e2e",
+            "lint"
+          ],
+          "additionalProperties": false
+        },
+        "holdouts": {
+          "type": "object",
+          "properties": {
+            "paths": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "markerComment": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "paths",
+            "markerComment"
+          ],
+          "additionalProperties": false
+        },
+        "iteration": {
+          "type": "object",
+          "properties": {
+            "maxAttempts": {
+              "type": "number"
+            }
+          },
+          "required": [
+            "maxAttempts"
+          ],
+          "additionalProperties": false
+        },
+        "git": {
+          "type": "object",
+          "properties": {
+            "baseBranch": {
+              "type": "string"
+            },
+            "branchPrefix": {
+              "type": "string"
+            },
+            "forbidPushToBase": {
+              "type": "boolean"
+            },
+            "blockNoVerify": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "baseBranch",
+            "branchPrefix",
+            "forbidPushToBase",
+            "blockNoVerify"
+          ],
+          "additionalProperties": false
+        },
+        "models": {
+          "$ref": "#/definitions/HarnessModelConfig"
+        },
+        "reviewProfiles": {
+          "$ref": "#/definitions/ReviewProfileSet"
+        },
+        "tierScopeRules": {
+          "$ref": "#/definitions/TierScopeRules"
+        },
+        "fullVerificationTriggers": {
+          "$ref": "#/definitions/FullVerificationTriggers"
+        }
+      },
+      "required": [
+        "openspecDir",
+        "worktreeDir",
+        "logDir",
+        "verification",
+        "holdouts",
+        "iteration",
+        "git"
+      ],
+      "additionalProperties": false
+    },
+    "HarnessModelConfig": {
+      "type": "object",
+      "properties": {
+        "holdouts": {
+          "$ref": "#/definitions/HarnessModelSlug"
+        },
+        "plan": {
+          "$ref": "#/definitions/HarnessModelSlug"
+        },
+        "implement": {
+          "$ref": "#/definitions/HarnessModelSlug"
+        },
+        "review": {
+          "$ref": "#/definitions/HarnessModelSlug"
+        }
+      },
+      "additionalProperties": false
+    },
+    "HarnessModelSlug": {
+      "type": "string",
+      "enum": [
+        "opus",
+        "sonnet",
+        "haiku"
+      ]
+    },
+    "ReviewProfileSet": {
+      "type": "object",
+      "properties": {
+        "default": {
+          "$ref": "#/definitions/ReviewProfile"
+        }
+      },
+      "required": [
+        "default"
+      ],
+      "additionalProperties": {
+        "$ref": "#/definitions/ReviewProfile"
+      }
+    },
+    "ReviewProfile": {
+      "type": "object",
+      "properties": {
+        "reviewers": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/ReviewerName"
+          }
+        },
+        "description": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "reviewers"
+      ],
+      "additionalProperties": false
+    },
+    "ReviewerName": {
+      "type": "string",
+      "enum": [
+        "code-reviewer",
+        "architect-review",
+        "security-auditor",
+        "spec-compliance"
+      ]
+    },
+    "TierScopeRules": {
+      "type": "object",
+      "properties": {
+        "content": {
+          "$ref": "#/definitions/TierScopeRule"
+        },
+        "infra": {
+          "$ref": "#/definitions/TierScopeRule"
+        }
+      },
+      "additionalProperties": false
+    },
+    "TierScopeRule": {
+      "type": "object",
+      "properties": {
+        "forbiddenPrefixes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "forbiddenPrefixes"
+      ],
+      "additionalProperties": false,
+      "description": "Per-tier scope guardrail rules. When the merge-to-main guardrail runs, any diff path matching a `forbiddenPrefixes` entry for the story's tier blocks the merge. Omit a tier entry (or the whole field) to disable enforcement for that tier. `primitives` is never restricted.\n\nExample for a component library:   { content: { forbiddenPrefixes: [\"src/lib/\", \"src/api/\"] },     infra:   { forbiddenPrefixes: [\"src/\"] } }"
+    },
+    "FullVerificationTriggers": {
+      "type": "object",
+      "properties": {
+        "exactPaths": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "prefixes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": false,
+      "description": "Triggers that force `verify-all --full` (slow CLI-integration suites) even when a `--fast` merge was requested. Exact-path match or prefix match. Holdout files always trigger full verification."
+    }
+  },
+  "$id": "https://unpkg.com/@baton-tools/harness/schema.json",
+  "title": "HarnessConfig"
+}

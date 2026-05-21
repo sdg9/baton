@@ -102,22 +102,47 @@ async function copyRecursive(src: string, dest: string, force: boolean): Promise
   return written;
 }
 
+function parseFormat(args: string[]): "ts" | "json" {
+  // Supports `--format ts|json` and `--format=ts|json`. Default: ts.
+  const eq = args.find((a) => a.startsWith("--format="));
+  if (eq) {
+    const value = eq.slice("--format=".length);
+    if (value !== "ts" && value !== "json") {
+      throw new Error(`init: --format must be 'ts' or 'json' (got '${value}')`);
+    }
+    return value;
+  }
+  const idx = args.indexOf("--format");
+  if (idx >= 0) {
+    const value = args[idx + 1];
+    if (value !== "ts" && value !== "json") {
+      throw new Error(`init: --format must be 'ts' or 'json' (got '${value ?? "<missing>"}')`);
+    }
+    return value;
+  }
+  return "ts";
+}
+
 export async function init(args: string[]): Promise<number> {
   const force = args.includes("--force");
+  const format = parseFormat(args);
   const cwd = process.cwd();
   const templatesDir = locateTemplatesDir();
 
   process.stdout.write(`Initializing baton-harness in ${cwd}\n`);
   process.stdout.write(`(templates from ${templatesDir})\n\n`);
 
-  // 1. Drop harness.config.ts at the repo root (if missing).
-  const configSrc = join(templatesDir, "harness.config.ts");
-  const configDest = join(cwd, "harness.config.ts");
+  // 1. Drop harness.config.{ts,json} at the repo root (if missing).
+  //    Default is .ts (typed schema, comments, computation). JSON variant
+  //    is opt-in via --format json and gets schema autocomplete via $schema.
+  const configFile = format === "json" ? "harness.config.json" : "harness.config.ts";
+  const configSrc = join(templatesDir, configFile);
+  const configDest = join(cwd, configFile);
   if (existsSync(configDest) && !force) {
-    process.stdout.write(`  [skip] harness.config.ts (already exists)\n`);
+    process.stdout.write(`  [skip] ${configFile} (already exists)\n`);
   } else {
     await copyFile(configSrc, configDest);
-    process.stdout.write(`  [write] harness.config.ts\n`);
+    process.stdout.write(`  [write] ${configFile}\n`);
   }
 
   // 2. Scaffold openspec/ if missing.
@@ -177,7 +202,7 @@ export async function init(args: string[]): Promise<number> {
   }
 
   process.stdout.write("\nNext steps:\n");
-  process.stdout.write("  1. Edit harness.config.ts — set verification commands + tier scope rules.\n");
+  process.stdout.write(`  1. Edit ${configFile} — set verification commands + tier scope rules.\n`);
   process.stdout.write("  2. Edit openspec/project.md — record architectural invariants.\n");
   process.stdout.write("  3. Add to .gitignore:  .claude/worktrees/   .claude/harness-logs/\n");
   process.stdout.write("  4. Author your first proposal:  baton-harness ...  (see README).\n");

@@ -1,0 +1,67 @@
+{
+  "$schema": "https://unpkg.com/@baton-tools/harness/schema.json",
+
+  // Where OpenSpec change folders live. Reads <openspecDir>/changes/<story>/.
+  "openspecDir": "openspec",
+  "worktreeDir": ".claude/worktrees",
+  "logDir": ".claude/harness-logs",
+
+  // Shell commands the harness runs as quality gates. Each must exit 0 on
+  // pass and non-zero on fail. Invoked via `sh -c`.
+  "verification": {
+    "lint": "npm run lint",
+    "typecheck": "npm run typecheck",
+    "unit": "npm run test:unit",
+    "e2e": "npm run test:e2e"
+    // Optional slow suite for `verify-all --full`:
+    // "unitFull": "npm run test:unit -- --include-slow"
+  },
+
+  // Holdout file globs. A file is a holdout only when BOTH (a) its path
+  // matches one of these globs AND (b) its first line is exactly
+  // `// @openspec-holdout`.
+  "holdouts": {
+    "paths": [
+      "src/**/*.holdout.test.ts",
+      "e2e/**/*.holdout.spec.ts"
+    ],
+    "markerComment": "// @openspec-holdout"
+  },
+
+  "iteration": {
+    "maxAttempts": 5
+  },
+
+  "git": {
+    "baseBranch": "main",
+    "branchPrefix": "story/",
+    "forbidPushToBase": true,
+    "blockNoVerify": true
+  },
+
+  // Per-tier forbidden-path rules. Enforced by merge-to-main.
+  // primitives = core contracts; content = data/variants; infra = build/tooling.
+  "tierScopeRules": {
+    "content": { "forbiddenPrefixes": ["src/core/"] },
+    "infra": { "forbiddenPrefixes": ["src/"] }
+  },
+
+  // Paths that force `verify-all --full` even when `--fast` was requested.
+  "fullVerificationTriggers": {
+    "exactPaths": [
+      "harness.config.ts",
+      "harness.config.json",
+      "package.json",
+      "package-lock.json",
+      "tsconfig.json"
+    ],
+    "prefixes": []
+  }
+
+  // Optional knobs (uncomment to override defaults):
+  // "models": { "holdouts": "sonnet", "plan": "opus", "implement": "sonnet", "review": "opus" },
+  // "reviewProfiles": {
+  //   "default": { "reviewers": ["code-reviewer", "architect-review", "security-auditor", "spec-compliance"] },
+  //   "minimal": { "reviewers": ["code-reviewer"] }
+  // }
+}

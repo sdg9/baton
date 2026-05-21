@@ -25,11 +25,13 @@
     "bin",
     "plugin",
     "templates",
+    "schema.json",
     "README.md",
     "LICENSE"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.json && node scripts/build-schema.mjs",
+    "build:schema": "node scripts/build-schema.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "prepublishOnly": "npm run build"
   },
@@ -43,6 +45,7 @@
   },
   "devDependencies": {
     "@types/node": "^20.11.0",
+    "ts-json-schema-generator": "^2.3.0",
     "typescript": "^5.5.0"
   },
   "keywords": [
