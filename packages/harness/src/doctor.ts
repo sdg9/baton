@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
-import type { HarnessConfig } from "./types.js";
+import type { HarnessConfig, VerificationKind } from "./types.js";
 import { HarnessConfigError } from "./types.js";
 
 const execFileAsync = promisify(execFile);
@@ -258,23 +258,18 @@ async function checkConfigParses(ctx: DoctorContext): Promise<CheckResult> {
 }
 
 async function checkOpenspecDir(ctx: DoctorContext): Promise<CheckResult> {
-  if (ctx.configState.kind !== "ok") {
-    return {
-      name: "openspec-dir",
-      tier: "hard",
-      status: "fail",
-      message: "skipped: config unavailable",
-    };
-  }
+  const gate = requireConfig("openspec-dir", ctx);
+  if ("skip" in gate) return gate.skip;
+  const { config } = gate;
   const { existsSync, statSync } = await import("node:fs");
   const { resolve } = await import("node:path");
-  const dir = resolve(ctx.cwd, ctx.configState.config.openspecDir);
+  const dir = resolve(ctx.cwd, config.openspecDir);
   if (!existsSync(dir) || !statSync(dir).isDirectory()) {
     return {
       name: "openspec-dir",
       tier: "hard",
       status: "fail",
-      message: `${ctx.configState.config.openspecDir}/ not found`,
+      message: `${config.openspecDir}/ not found`,
       hint: "run `npx -y @baton-tools/harness init`",
     };
   }
@@ -282,28 +277,23 @@ async function checkOpenspecDir(ctx: DoctorContext): Promise<CheckResult> {
     name: "openspec-dir",
     tier: "hard",
     status: "pass",
-    message: ctx.configState.config.openspecDir,
+    message: config.openspecDir,
   };
 }
 
 async function checkOpenspecProjectMd(ctx: DoctorContext): Promise<CheckResult> {
-  if (ctx.configState.kind !== "ok") {
-    return {
-      name: "openspec-project-md",
-      tier: "hard",
-      status: "fail",
-      message: "skipped: config unavailable",
-    };
-  }
+  const gate = requireConfig("openspec-project-md", ctx);
+  if ("skip" in gate) return gate.skip;
+  const { config } = gate;
   const { existsSync } = await import("node:fs");
   const { resolve } = await import("node:path");
-  const path = resolve(ctx.cwd, ctx.configState.config.openspecDir, "project.md");
+  const path = resolve(ctx.cwd, config.openspecDir, "project.md");
   if (!existsSync(path)) {
     return {
       name: "openspec-project-md",
       tier: "hard",
       status: "fail",
-      message: `${ctx.configState.config.openspecDir}/project.md not found`,
+      message: `${config.openspecDir}/project.md not found`,
       hint: "run `npx -y @baton-tools/harness init`",
     };
   }
@@ -336,6 +326,83 @@ async function checkOpenspecCli(_ctx: DoctorContext): Promise<CheckResult> {
   }
 }
 
+function makeVerifyCheck(kind: VerificationKind): Check {
+  const name = `verify-${kind}`;
+  const fn = async (ctx: DoctorContext): Promise<CheckResult> => {
+    const gate = requireConfig(name, ctx);
+    if ("skip" in gate) return gate.skip;
+    const { config } = gate;
+    const cmd = config.verification?.[kind];
+    if (!cmd || typeof cmd !== "string" || cmd.trim() === "") {
+      return {
+        name,
+        tier: "hard",
+        status: "fail",
+        message: `verification.${kind} is not set`,
+        hint: `set verification.${kind} in your harness.config`,
+      };
+    }
+    // First token = the binary. Strip any leading env-var assignments like
+    // `FOO=bar cmd` for robustness against common patterns.
+    const tokens = cmd.split(/\s+/);
+    let i = 0;
+    while (i < tokens.length && /^[A-Z_][A-Z0-9_]*=/.test(tokens[i] ?? "")) i++;
+    const firstToken = tokens[i];
+    if (!firstToken) {
+      return {
+        name,
+        tier: "hard",
+        status: "fail",
+        message: `could not extract a binary token from "${cmd}"`,
+      };
+    }
+
+    const resolved = await resolveBinary(firstToken, ctx.cwd);
+    if (!resolved) {
+      return {
+        name,
+        tier: "hard",
+        status: "fail",
+        message: `binary "${firstToken}" not found on PATH or in node_modules/.bin`,
+        hint: "install the missing tool or fix the verify command",
+      };
+    }
+    return { name, tier: "hard", status: "pass", message: `${firstToken} → ${resolved}` };
+  };
+  // Give the function a real name so the runOne fallback can report it.
+  Object.defineProperty(fn, "name", { value: `checkVerify_${kind}` });
+  return fn;
+}
+
+async function resolveBinary(token: string, cwd: string): Promise<string | null> {
+  const { existsSync, statSync } = await import("node:fs");
+  const { resolve } = await import("node:path");
+
+  // 1. Absolute or cwd-relative path with separators — accept if executable.
+  if (token.includes("/") || token.includes("\\")) {
+    const abs = resolve(cwd, token);
+    if (existsSync(abs) && statSync(abs).isFile()) return abs;
+    return null;
+  }
+
+  // 2. cwd/node_modules/.bin/<token>
+  const local = resolve(cwd, "node_modules", ".bin", token);
+  if (existsSync(local)) return local;
+  // Also check Windows-style .cmd/.ps1 variants.
+  if (existsSync(`${local}.cmd`)) return `${local}.cmd`;
+
+  // 3. PATH lookup — defer to `which`/`where`. Both return non-zero when not
+  // found; we treat any non-zero as "not resolved".
+  const lookup = process.platform === "win32" ? "where" : "which";
+  try {
+    const { stdout } = await execFileAsync(lookup, [token]);
+    const first = stdout.split(/\r?\n/).find((l) => l.trim());
+    return first ? first.trim() : null;
+  } catch {
+    return null;
+  }
+}
+
 const HARD_CHECKS: Check[] = [
   checkGitRepo,
   checkNodeVersion,
@@ -345,6 +412,10 @@ const HARD_CHECKS: Check[] = [
   checkOpenspecDir,
   checkOpenspecProjectMd,
   checkOpenspecCli,
+  makeVerifyCheck("lint"),
+  makeVerifyCheck("typecheck"),
+  makeVerifyCheck("unit"),
+  makeVerifyCheck("e2e"),
 ];
 const SOFT_CHECKS: Check[] = [];
 
@@ -383,6 +454,26 @@ function summarize(checks: CheckResult[]) {
   const summary = { pass: 0, warn: 0, fail: 0 };
   for (const c of checks) summary[c.status]++;
   return summary;
+}
+
+/**
+ * Gate for config-dependent checks. Returns a skip CheckResult when config
+ * isn't `ok` so the caller can early-return; otherwise returns the cached
+ * HarnessConfig for the check to use.
+ *
+ * The skip message is the stable JSON contract "skipped: config unavailable" —
+ * do not change it without updating the workbench consumer.
+ */
+function requireConfig(
+  name: string,
+  ctx: DoctorContext,
+): { skip: CheckResult } | { config: HarnessConfig } {
+  if (ctx.configState.kind !== "ok") {
+    return {
+      skip: { name, tier: "hard", status: "fail", message: "skipped: config unavailable" },
+    };
+  }
+  return { config: ctx.configState.config };
 }
 
 // Renderers ----------------------------------------------------------------

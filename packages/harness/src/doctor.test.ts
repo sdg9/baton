@@ -211,3 +211,53 @@ describe("runDoctor — openspec-cli check", () => {
     }
   });
 });
+
+describe("runDoctor — verify-command checks", () => {
+  let dir: string;
+
+  beforeEach(() => {
+    dir = makeTempDir();
+  });
+
+  afterEach(() => {
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it("verify-lint passes when the first token resolves on PATH (node)", async () => {
+    const cfg = JSON.parse(VALID_CONFIG_JSON);
+    cfg.verification.lint = "node --version";
+    writeFileSync(join(dir, "harness.config.json"), JSON.stringify(cfg));
+    const report = await runDoctor(dir);
+    expect(report.checks.find((c) => c.name === "verify-lint")?.status).toBe("pass");
+  });
+
+  it("verify-typecheck fails when the first token cannot be resolved", async () => {
+    const cfg = JSON.parse(VALID_CONFIG_JSON);
+    cfg.verification.typecheck = "definitely-not-a-real-binary-xyz123 --check";
+    writeFileSync(join(dir, "harness.config.json"), JSON.stringify(cfg));
+    const report = await runDoctor(dir);
+    expect(report.checks.find((c) => c.name === "verify-typecheck")?.status).toBe("fail");
+  });
+
+  it("verify-unit passes when the first token resolves in cwd/node_modules/.bin", async () => {
+    const cfg = JSON.parse(VALID_CONFIG_JSON);
+    cfg.verification.unit = "my-fake-runner --watch=false";
+    writeFileSync(join(dir, "harness.config.json"), JSON.stringify(cfg));
+    mkdirSync(join(dir, "node_modules", ".bin"), { recursive: true });
+    // Create an executable shim — content doesn't matter; the check resolves only.
+    writeFileSync(join(dir, "node_modules", ".bin", "my-fake-runner"), "#!/bin/sh\nexit 0\n", {
+      mode: 0o755,
+    });
+    const report = await runDoctor(dir);
+    expect(report.checks.find((c) => c.name === "verify-unit")?.status).toBe("pass");
+  });
+
+  it("all four verify-* checks are skipped when config is unavailable", async () => {
+    const report = await runDoctor(dir);
+    for (const name of ["verify-lint", "verify-typecheck", "verify-unit", "verify-e2e"]) {
+      const check = report.checks.find((c) => c.name === name);
+      expect(check?.status).toBe("fail");
+      expect(check?.message).toMatch(/skipped: config unavailable/i);
+    }
+  });
+});
