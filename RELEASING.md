@@ -67,17 +67,20 @@ Bump levels: `patch` | `minor` | `major`. Use semver discipline — `major` for 
 pnpm version-packages
 ```
 
-This runs `changeset version`, which:
-- Bumps version in `packages/harness/package.json` and/or `packages/workbench/package.json` as your changeset(s) declared.
-- Cascades the workspace-internal dep bump to the workbench (per `updateInternalDependencies: patch`).
-- Writes/appends a `CHANGELOG.md` in each bumped package.
-- **Deletes the changeset file(s)** you wrote in Step 1.
-- Updates `pnpm-lock.yaml`.
+This runs `changeset version` and then `node scripts/sync-plugin-version.mjs`, which together:
+- Bump version in `packages/harness/package.json` and/or `packages/workbench/package.json` as your changeset(s) declared.
+- Cascade the workspace-internal dep bump to the workbench (per `updateInternalDependencies: patch`).
+- Write/append a `CHANGELOG.md` in each bumped package.
+- **Delete the changeset file(s)** you wrote in Step 1.
+- Update `pnpm-lock.yaml`.
+- Mirror the new harness version into `packages/harness/plugin/.claude-plugin/plugin.json` and `.claude-plugin/marketplace.json` so the Claude Code plugin and marketplace manifest stay in lockstep with the npm version. The sync runs unconditionally; if no harness bump happened, it's a no-op write of the same version.
 
 ### Step 3 — Commit the version bump
 
 ```bash
-git add .changeset packages/*/package.json packages/*/CHANGELOG.md pnpm-lock.yaml
+git add .changeset packages/*/package.json packages/*/CHANGELOG.md pnpm-lock.yaml \
+  packages/harness/plugin/.claude-plugin/plugin.json \
+  .claude-plugin/marketplace.json
 git status   # sanity check — only the above files should be staged
 git commit -m "release: <package(s)>@<version(s)>"
 ```

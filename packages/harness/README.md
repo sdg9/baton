@@ -63,14 +63,17 @@ A holdout is a test file marked `// @openspec-holdout` on its first line and mat
 
 This is the single most valuable pattern. Once a contract is encoded as a holdout, an entire LLM session cannot drift away from it without you noticing.
 
-## Install in a consuming repo
+## Install in a consuming repo (recommended path)
+
+The recommended path skips `npm install` in the consuming repo entirely. The Claude Code plugin handles orchestration; the CLI runs on demand via `npx`.
 
 ```bash
-# 1. Add the package
-npm install --save-dev @baton-tools/harness
+# 1. In Claude Code: install the plugin from the marketplace
+#    /plugin marketplace add sdg9/baton
+#    /plugin install baton-harness@baton
 
-# 2. Scaffold harness.config.ts + openspec/ + commit-msg hook
-npx baton-harness init --with-husky
+# 2. Scaffold harness.config.ts + openspec/ + commit-msg hook in your repo
+npx -y @baton-tools/harness init --with-husky
 
 # 3. Edit harness.config.ts to point at YOUR verify commands and tier rules
 $EDITOR harness.config.ts
@@ -78,12 +81,6 @@ $EDITOR harness.config.ts
 # 4. Add to .gitignore
 echo ".claude/worktrees/" >> .gitignore
 echo ".claude/harness-logs/" >> .gitignore
-
-# 5. Install the Claude Code plugin (one-time, user-level)
-#    Option A — symlink the bundled plugin into your Claude plugins dir:
-ln -s "$(npm prefix)/node_modules/@baton-tools/harness/plugin" \
-      ~/.claude/plugins/baton-harness
-#    Option B — point Claude Code at the plugin via its marketplace UI.
 ```
 
 You're ready. Write a proposal, approve it, then in Claude Code:
@@ -91,6 +88,67 @@ You're ready. Write a proposal, approve it, then in Claude Code:
 ```
 /harness <story-name>
 ```
+
+The skill invokes the CLI as `npx -y -p @baton-tools/harness@<version> baton-harness <subcommand>` — `npx` uses your `node_modules` copy if you've installed one, otherwise fetches the pinned version into the per-user cache (`~/.npm/_npx/`). First call after a version bump downloads (~5-30s); subsequent calls are cached and fast.
+
+## Installing the Claude Code plugin
+
+The npm package ships both the `baton-harness` CLI and a Claude Code plugin (under `plugin/`). The plugin contains the orchestration playbook, reviewer subagents, and `/harness`-style commands; the CLI is the engine those commands shell out to via `npx`.
+
+Three install paths, in order of recommendation:
+
+### Option C — marketplace + on-demand npx (recommended)
+
+```
+/plugin marketplace add sdg9/baton
+/plugin install baton-harness@baton
+```
+
+That's the only install step. The plugin's skill invokes the CLI as `npx -y -p @baton-tools/harness@<pinned-version> baton-harness <subcommand>`; the pinned version is rewritten at every release by `scripts/sync-plugin-version.mjs` so the plugin and CLI are always in lockstep.
+
+Tradeoffs:
+- One install. Works in every consuming repo with no per-project `npm install`.
+- Plugin and CLI versions are pinned together — bump them by running `/plugin update baton-harness`.
+- ~200-500ms of `npx` overhead per CLI call (cache-warm). Across ~15-20 calls per `/harness` run, that's +5-10s total per story. The commit-msg hook does NOT pay this tax — it's a pure shell script with no CLI dependency.
+- First call after a version bump downloads the tarball into the npx cache. One-time, ~5-30s.
+
+### Option A — npm-installed CLI + symlinked plugin
+
+```bash
+npm install --save-dev @baton-tools/harness
+ln -s "$(npm prefix)/node_modules/@baton-tools/harness/plugin" \
+      ~/.claude/plugins/baton-harness
+```
+
+This sidesteps the `npx` per-call tax — `baton-harness` is on PATH via `node_modules/.bin`, and the skill's `npx -y -p ...` invocation uses that local copy directly without a registry lookup.
+
+Tradeoffs:
+- Fastest per-call. No npx overhead.
+- The symlink is bound to **one** consuming repo's `node_modules`. To decouple, install globally (`npm i -g @baton-tools/harness`) and symlink from the global `node_modules` instead.
+- Extra per-repo install step (`npm install --save-dev`), and you have to remember to bump it (`npm install @baton-tools/harness@latest`) alongside `/plugin update`.
+- Required if you want to **import** harness functions in your own TypeScript code (`import { loadConfig, mergeToMain } from "@baton-tools/harness"`). The library exports are useful for custom tooling and for the workbench.
+
+### Option B — marketplace plugin + npm-installed CLI on PATH
+
+```
+/plugin marketplace add sdg9/baton
+/plugin install baton-harness@baton
+```
+
+```bash
+npm i -g @baton-tools/harness   # or npm i -D in each consuming repo
+```
+
+Identical runtime behavior to Option C (skill shells out via `npx`), but if `@baton-tools/harness` is in `node_modules/.bin` or globally installed, `npx` resolves it locally instead of going to the cache — so you get Option A's speed.
+
+Tradeoffs:
+- Same as C plus a redundant install. Mostly useful if you started with C and later want library imports without changing the install model.
+
+### Which should I pick?
+
+- **First-time setup, want one install** → Option C.
+- **Long-running project where the +10s/story matters or you're using harness as a library** → Option A.
+- **Hacking on the harness itself** → `/plugin marketplace add /path/to/your/clone` for the plugin half, `pnpm link` or `npm link` for the CLI half.
 
 ## Configuring for your project
 
