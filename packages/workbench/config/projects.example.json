@@ -5,8 +5,8 @@
       "name": "Example Project",
       "path": "/path/to/your/project",
       "adapter": "openspec",
-      "defaultAgent": "codex",
-      "allowedAgents": ["claude", "codex"],
+      "defaultAgent": "claude",
+      "allowedAgents": ["claude"],
       "openspec": {
         "listCommand": "openspec list --json",
         "validateCommand": "openspec validate --strict"

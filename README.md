@@ -5,7 +5,7 @@ Spec-driven autonomous-development tooling: a harness that drives an LLM through
 This repository contains two packages:
 
 - **[`packages/harness`](./packages/harness)** — `@baton-tools/harness` on npm. A TypeScript CLI plus Claude Code plugin (`baton-harness`) that orchestrates the autonomous-development loop. Project-agnostic core; per-repo config via `harness.config.ts`.
-- **[`packages/workbench`](./packages/workbench)** — `@baton-tools/workbench` on npm. A local-first browser kanban for launching and monitoring Claude/Codex terminal sessions against allowlisted projects. Reads OpenSpec changes natively; lights up extra controls when a project has the harness installed.
+- **[`packages/workbench`](./packages/workbench)** — `@baton-tools/workbench` on npm. A local-first browser kanban for launching and monitoring Claude Code terminal sessions against allowlisted projects. Reads OpenSpec changes natively; lights up extra controls when a project has the harness installed.
 
 The two packages can be used independently. The workbench has *optional* awareness of the harness — projects without `harness.config.ts` still get a working kanban; projects with it get harness-driven actions on the board.
 

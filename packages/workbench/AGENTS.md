@@ -1,6 +1,6 @@
 # Agent Instructions
 
-This project builds a local-first web workbench for managing Claude/Codex
+This project builds a local-first web workbench for managing Claude Code
 terminal sessions from a Kanban board.
 
 ## Canonical Instructions

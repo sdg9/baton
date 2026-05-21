@@ -5,12 +5,6 @@
       "command": "claude",
       "args": [],
       "allowed": true
-    },
-    "codex": {
-      "label": "Codex",
-      "command": "codex",
-      "args": ["--dangerously-bypass-approvals-and-sandbox"],
-      "allowed": true
     }
   },
   "session": {

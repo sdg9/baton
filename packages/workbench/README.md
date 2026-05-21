@@ -1,6 +1,6 @@
 # @baton-tools/workbench
 
-Local-first Kanban board for launching and monitoring Claude/Codex terminal sessions against your local projects.
+Local-first Kanban board for launching and monitoring Claude Code terminal sessions against your local projects.
 
 Part of the [Baton](https://github.com/sdg9/baton) monorepo. Pairs naturally with [`@baton-tools/harness`](../harness) — projects with a `harness.config.ts` get harness-driven actions on the board (approve, status, holdout-check, verify), but the workbench works against any project with OpenSpec changes (and is adapter-shaped to support other source-of-truth backends in the future).
 
@@ -18,7 +18,7 @@ Part of the [Baton](https://github.com/sdg9/baton) monorepo. Pairs naturally wit
 Browser UI
   <-> local HTTP/WebSocket server on 127.0.0.1
   <-> PTY/tmux session manager
-  <-> claude / codex / shell
+  <-> claude / shell
   <-> allowlisted project workspaces
 ```
 

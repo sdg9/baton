@@ -181,7 +181,7 @@ type IdeaDraft = {
 function App() {
   const [columns, setColumns] = useState<BoardColumn[]>([]);
   const [activeCard, setActiveCard] = useState<TerminalTarget | null>(null);
-  const [profileId, setProfileId] = useState('codex');
+  const [profileId, setProfileId] = useState('claude');
   const [cardAgentOverrides, setCardAgentOverrides] = useState<Record<string, string>>({});
   const [diagnostics, setDiagnostics] = useState<Array<{ name: string; ok: boolean; detail: string }>>([]);
   const [error, setError] = useState<string | null>(null);
@@ -470,7 +470,7 @@ function App() {
     }), sortMode)
   }));
   const projectId = columns.flatMap((column) => column.cards)[0]?.projectId ?? '';
-  const addCardAgents = columns.flatMap((column) => column.cards)[0]?.allowedAgents ?? ['claude', 'codex'];
+  const addCardAgents = columns.flatMap((column) => column.cards)[0]?.allowedAgents ?? ['claude'];
   const visibleTmuxSessions = tmuxSessions.slice(tmuxPage * tmuxLayout, tmuxPage * tmuxLayout + tmuxLayout);
   const maxTmuxPage = Math.max(0, Math.ceil(tmuxSessions.length / tmuxLayout) - 1);
   const docPanelCard = docPanelTarget?.type === 'card'
@@ -488,7 +488,7 @@ function App() {
       <header className="topbar">
         <div>
           <h1>Baton Workbench</h1>
-          <p>OpenSpec Kanban for local Claude/Codex tmux sessions</p>
+          <p>OpenSpec Kanban for local Claude tmux sessions</p>
         </div>
         <div className="status-strip">
           {diagnostics.map((item) => (

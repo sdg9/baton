@@ -2,7 +2,7 @@
 
 ## Purpose
 
-`@baton-tools/workbench` is a local-first web app for running one or more Claude/Codex terminal sessions from a Kanban board. Card source is pluggable; the first adapter reads OpenSpec changes from any allowlisted local project.
+`@baton-tools/workbench` is a local-first web app for running one or more Claude Code terminal sessions from a Kanban board. Card source is pluggable; the first adapter reads OpenSpec changes from any allowlisted local project.
 
 ## Product Shape
 
