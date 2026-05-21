@@ -1,5 +1,11 @@
 # @baton-tools/workbench
 
+## 1.1.1
+
+### Patch Changes
+
+- Republish with `@baton-tools/harness` resolved to its concrete version in the published tarball. Prior versions (1.0.1, 1.0.2, 1.1.0) shipped with `"@baton-tools/harness": "workspace:*"` literally, causing `npx @baton-tools/workbench@latest` to fail with `unsupported URL type "workspace:": workspace:*`.
+
 ## 1.1.0
 
 ### Minor Changes
