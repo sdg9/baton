@@ -298,6 +298,16 @@ describe("runDoctor — soft filesystem checks", () => {
     expect(report.checks.find((c) => c.name === "git-hook")?.status).toBe("pass");
   });
 
+  it("git-hook warns when hook file exists but core.hooksPath is unset", async () => {
+    mkdirSync(join(dir, ".githooks"));
+    writeFileSync(join(dir, ".githooks", "commit-msg"), "#!/bin/sh\n", { mode: 0o755 });
+    // Intentionally do NOT set git config core.hooksPath here.
+    const report = await runDoctor(dir);
+    const hook = report.checks.find((c) => c.name === "git-hook");
+    expect(hook?.status).toBe("warn");
+    expect(hook?.message).toMatch(/\(unset\)/);
+  });
+
   it("gitignore-worktree warns when .gitignore does not cover worktreeDir", async () => {
     writeFileSync(join(dir, ".gitignore"), "node_modules\n");
     const report = await runDoctor(dir);

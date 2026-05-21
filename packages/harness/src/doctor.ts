@@ -474,6 +474,9 @@ function makeGitignoreCheck(
     const text = readFileSync(gi, "utf8");
     const lines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
     // Match any line that equals the target (with or without trailing slash).
+    // Line-exact match only — we don't try to interpret parent-prefix patterns
+    // (e.g. ".claude/" covering ".claude/worktrees/"). Users with such patterns
+    // will see a benign warn; spec accepts that trade-off.
     const normalized = target.replace(/\/$/, "");
     const matched = lines.some(
       (l) => l === normalized || l === `${normalized}/` || l === `/${normalized}` || l === `/${normalized}/`,
