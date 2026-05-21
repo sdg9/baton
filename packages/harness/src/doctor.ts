@@ -496,6 +496,191 @@ function makeGitignoreCheck(
   return fn;
 }
 
+async function checkClaudeOnPath(_ctx: DoctorContext): Promise<CheckResult> {
+  try {
+    const { stdout } = await execFileAsync("claude", ["--version"], { timeout: 5_000 });
+    return {
+      name: "claude-on-path",
+      tier: "soft",
+      status: "pass",
+      message: stdout.trim().split("\n")[0],
+    };
+  } catch {
+    return {
+      name: "claude-on-path",
+      tier: "soft",
+      status: "warn",
+      message: "claude CLI not found on PATH",
+      hint: "install Claude Code (https://claude.com/claude-code)",
+    };
+  }
+}
+
+async function findPluginUnder(root: string, pluginName: string): Promise<string | null> {
+  // Best-effort: walk a small subtree under ~/.claude/plugins/ looking for a
+  // plugin.json whose `name` matches. Layout has changed across Claude Code
+  // versions; we tolerate up to 4 levels of nesting.
+  const { existsSync, readdirSync, statSync, readFileSync } = await import("node:fs");
+  const { join: pjoin } = await import("node:path");
+  if (!existsSync(root)) return null;
+  const queue: Array<{ path: string; depth: number }> = [{ path: root, depth: 0 }];
+  while (queue.length > 0) {
+    const { path, depth } = queue.shift()!;
+    let entries: string[];
+    try {
+      entries = readdirSync(path);
+    } catch {
+      continue;
+    }
+    if (entries.includes("plugin.json")) {
+      try {
+        const json = JSON.parse(readFileSync(pjoin(path, "plugin.json"), "utf8")) as {
+          name?: string;
+        };
+        if (json.name === pluginName) return path;
+      } catch {
+        // ignore
+      }
+    }
+    if (depth < 4) {
+      for (const name of entries) {
+        const child = pjoin(path, name);
+        try {
+          if (statSync(child).isDirectory()) queue.push({ path: child, depth: depth + 1 });
+        } catch {
+          // ignore
+        }
+      }
+    }
+  }
+  return null;
+}
+
+async function checkPluginInstalled(_ctx: DoctorContext): Promise<CheckResult> {
+  const { homedir } = await import("node:os");
+  const { join: pjoin } = await import("node:path");
+  const { existsSync } = await import("node:fs");
+  const root = pjoin(homedir(), ".claude", "plugins");
+  if (!existsSync(root)) {
+    return {
+      name: "plugin-installed",
+      tier: "soft",
+      status: "warn",
+      message: `could not introspect ${root}`,
+      hint: "/plugin install baton-harness@baton",
+    };
+  }
+  const found = await findPluginUnder(root, "baton-harness");
+  if (found) {
+    return { name: "plugin-installed", tier: "soft", status: "pass", message: found };
+  }
+  return {
+    name: "plugin-installed",
+    tier: "soft",
+    status: "warn",
+    message: `baton-harness plugin not found under ${root}`,
+    hint: "/plugin install baton-harness@baton",
+  };
+}
+
+async function checkSuperpowersInstalled(_ctx: DoctorContext): Promise<CheckResult> {
+  const { homedir } = await import("node:os");
+  const { join: pjoin } = await import("node:path");
+  const { existsSync } = await import("node:fs");
+  const root = pjoin(homedir(), ".claude", "plugins");
+  if (!existsSync(root)) {
+    return {
+      name: "superpowers-installed",
+      tier: "soft",
+      status: "warn",
+      message: `could not introspect ${root}`,
+    };
+  }
+  const found = await findPluginUnder(root, "superpowers");
+  if (found) {
+    return { name: "superpowers-installed", tier: "soft", status: "pass", message: found };
+  }
+  return {
+    name: "superpowers-installed",
+    tier: "soft",
+    status: "warn",
+    message: "superpowers plugin not detected",
+  };
+}
+
+async function checkVersionDrift(ctx: DoctorContext): Promise<CheckResult | null> {
+  // Returns null when no local install — caller filters nulls out.
+  const { existsSync, readFileSync } = await import("node:fs");
+  const { resolve } = await import("node:path");
+  const localPkgPath = resolve(
+    ctx.cwd,
+    "node_modules",
+    "@baton-tools",
+    "harness",
+    "package.json",
+  );
+  if (!existsSync(localPkgPath)) return null;
+
+  let installedVersion: string;
+  try {
+    installedVersion = (JSON.parse(readFileSync(localPkgPath, "utf8")) as { version: string })
+      .version;
+  } catch {
+    return {
+      name: "version-drift",
+      tier: "soft",
+      status: "warn",
+      message: "could not read local @baton-tools/harness package.json",
+    };
+  }
+
+  // Read the pinned version from the plugin's SKILL.md.
+  const skillPath = resolve(
+    ctx.cwd,
+    "node_modules",
+    "@baton-tools",
+    "harness",
+    "plugin",
+    "skills",
+    "autonomous-harness",
+    "SKILL.md",
+  );
+  if (!existsSync(skillPath)) {
+    return {
+      name: "version-drift",
+      tier: "soft",
+      status: "warn",
+      message: `local install at ${installedVersion}, plugin SKILL.md not found — cannot compare`,
+    };
+  }
+  const skill = readFileSync(skillPath, "utf8");
+  const match = skill.match(/@baton-tools\/harness@([0-9]+\.[0-9]+\.[0-9]+[^ )]*)/);
+  if (!match) {
+    return {
+      name: "version-drift",
+      tier: "soft",
+      status: "warn",
+      message: `local install at ${installedVersion}, could not parse pinned version from SKILL.md`,
+    };
+  }
+  const pinned = match[1];
+  if (pinned === installedVersion) {
+    return {
+      name: "version-drift",
+      tier: "soft",
+      status: "pass",
+      message: `${installedVersion} matches plugin pin`,
+    };
+  }
+  return {
+    name: "version-drift",
+    tier: "soft",
+    status: "warn",
+    message: `installed ${installedVersion} vs plugin pin ${pinned}`,
+    hint: `npm i -D @baton-tools/harness@${pinned} or /plugin update baton-harness`,
+  };
+}
+
 const HARD_CHECKS: Check[] = [
   checkGitRepo,
   checkNodeVersion,
@@ -522,6 +707,9 @@ const SOFT_CHECKS: Check[] = [
     (ctx) => (ctx.configState.kind === "ok" ? ctx.configState.config.logDir : undefined),
     "logDir",
   ),
+  checkClaudeOnPath,
+  checkPluginInstalled,
+  checkSuperpowersInstalled,
 ];
 
 // Orchestrator -------------------------------------------------------------
@@ -535,6 +723,15 @@ export async function runDoctor(
   for (const check of [...HARD_CHECKS, ...SOFT_CHECKS]) {
     checks.push(await runOne(check, ctx));
   }
+  // version-drift is conditional — emit only when a local install exists.
+  const drift = await checkVersionDrift(ctx).catch((err: unknown) => ({
+    name: "version-drift",
+    tier: "soft" as CheckTier,
+    status: "warn" as CheckStatus,
+    message: err instanceof Error ? err.message : String(err),
+  }));
+  if (drift) checks.push(drift);
+
   const summary = summarize(checks);
   const ok = !checks.some((c) => c.tier === "hard" && c.status === "fail");
   return { ok, cwd, summary, checks };

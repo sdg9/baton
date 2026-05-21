@@ -321,3 +321,62 @@ describe("runDoctor — soft filesystem checks", () => {
     expect(report.checks.find((c) => c.name === "gitignore-logs")?.status).toBe("pass");
   });
 });
+
+describe("runDoctor — soft env/plugin checks", () => {
+  it("emits each soft env/plugin check with a well-formed result", async () => {
+    const dir = makeTempDir();
+    try {
+      const report = await runDoctor(dir);
+      for (const name of [
+        "claude-on-path",
+        "plugin-installed",
+        "superpowers-installed",
+      ]) {
+        const c = report.checks.find((c) => c.name === name);
+        expect(c).toBeDefined();
+        expect(c?.tier).toBe("soft");
+        expect(["pass", "warn"]).toContain(c?.status);
+      }
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("version-drift is omitted when no local install exists", async () => {
+    const dir = makeTempDir();
+    try {
+      const report = await runDoctor(dir);
+      const drift = report.checks.find((c) => c.name === "version-drift");
+      expect(drift).toBeUndefined();
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("version-drift warns on mismatch and passes on match", async () => {
+    const dir = makeTempDir();
+    try {
+      // Fake a local install: cwd/node_modules/@baton-tools/harness/package.json
+      const local = join(dir, "node_modules", "@baton-tools", "harness");
+      mkdirSync(local, { recursive: true });
+      writeFileSync(
+        join(local, "package.json"),
+        JSON.stringify({ name: "@baton-tools/harness", version: "9.9.9" }),
+      );
+      // Fake a SKILL.md pinning a different version.
+      const skillsDir = join(local, "plugin", "skills", "autonomous-harness");
+      mkdirSync(skillsDir, { recursive: true });
+      writeFileSync(
+        join(skillsDir, "SKILL.md"),
+        "Run `npx -y -p @baton-tools/harness@1.0.0 baton-harness status <story>`.\n",
+      );
+      const report = await runDoctor(dir);
+      const drift = report.checks.find((c) => c.name === "version-drift");
+      expect(drift?.tier).toBe("soft");
+      expect(drift?.status).toBe("warn");
+      expect(drift?.message).toMatch(/9\.9\.9.*1\.0\.0|1\.0\.0.*9\.9\.9/);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
