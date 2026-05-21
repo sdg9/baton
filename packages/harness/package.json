@@ -1,6 +1,6 @@
 {
   "name": "@baton-tools/harness",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "description": "Spec-driven autonomous-development harness with frozen holdout contracts, tier-aware adversarial review, and an OpenSpec workflow. Project-agnostic core; per-repo config.",
   "license": "MIT",
   "author": "Steven Goff",
