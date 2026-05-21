@@ -209,17 +209,23 @@ describe("runDoctor — openspec checks", () => {
     expect(report.checks.find((c) => c.name === "openspec-dir")?.status).toBe("pass");
   });
 
-  it("openspec-project-md fails when openspec/ exists but project.md does not", async () => {
+  it("openspec-project-md warns (soft) when openspec/ exists but project.md does not", async () => {
+    // Soft because the harness itself never reads project.md — OpenSpec does.
+    // Absence shouldn't block harness operation.
     mkdirSync(join(dir, "openspec"));
     const report = await runDoctor(dir);
-    expect(report.checks.find((c) => c.name === "openspec-project-md")?.status).toBe("fail");
+    const check = report.checks.find((c) => c.name === "openspec-project-md");
+    expect(check?.tier).toBe("soft");
+    expect(check?.status).toBe("warn");
   });
 
   it("openspec-project-md passes when openspec/project.md exists", async () => {
     mkdirSync(join(dir, "openspec"));
     writeFileSync(join(dir, "openspec", "project.md"), "# Project\n");
     const report = await runDoctor(dir);
-    expect(report.checks.find((c) => c.name === "openspec-project-md")?.status).toBe("pass");
+    const check = report.checks.find((c) => c.name === "openspec-project-md");
+    expect(check?.tier).toBe("soft");
+    expect(check?.status).toBe("pass");
   });
 
   it("openspec-dir is skipped (fail) when config is unavailable", async () => {
@@ -551,7 +557,6 @@ describe("runDoctor — integration", () => {
       expect(failNames).toContain("config-present");
       expect(failNames).toContain("config-parses");
       expect(failNames).toContain("openspec-dir");
-      expect(failNames).toContain("openspec-project-md");
 
       // JSON shape: every expected check name is present, exactly once.
       const json = JSON.parse(renderJson(report));
@@ -563,7 +568,6 @@ describe("runDoctor — integration", () => {
         "config-present",
         "config-parses",
         "openspec-dir",
-        "openspec-project-md",
         "openspec-cli",
         "verify-lint",
         "verify-typecheck",
@@ -577,6 +581,7 @@ describe("runDoctor — integration", () => {
         "claude-on-path",
         "plugin-installed",
         "superpowers-installed",
+        "openspec-project-md",
       ];
       for (const name of [...expectedHard, ...expectedSoft]) {
         expect(names.filter((n) => n === name)).toHaveLength(1);

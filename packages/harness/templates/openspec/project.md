@@ -1,23 +1,18 @@
-# Project notes for the @baton-tools/harness
+# Project notes
 
-This file holds project-level context the harness reuses across stories. Add anything that affects every story (architectural invariants, naming conventions, non-negotiable rules).
+Project-level context every OpenSpec change should respect. This file is read
+by tools and LLM agents working on proposals and implementations — keep it
+short, factual, and stable across changes.
 
 ## Architectural invariants
 
-<!-- Examples:
+<!-- Things that hold true regardless of which change is in flight.
+Examples:
 - `src/engine/` must not import from `src/scenes/`.
 - All randomness goes through `src/rng/`. No `Math.random()` in engine code.
 - Server is authoritative; clients never decide damage.
 -->
 
-## Tier mapping
-
-Per `harness.config.ts`'s `tierScopeRules`:
-
-- **primitives** — <describe what counts as primitives in this repo>
-- **content** — <describe>
-- **infra** — <describe>
-
 ## Non-negotiable rules
 
-<!-- Things the harness orchestrator AND human reviewers should never override. -->
+<!-- Conventions that must not be broken even by an in-progress change. -->

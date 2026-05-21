@@ -284,7 +284,10 @@ async function checkOpenspecDir(ctx: DoctorContext): Promise<CheckResult> {
 }
 
 async function checkOpenspecProjectMd(ctx: DoctorContext): Promise<CheckResult> {
-  const gate = requireConfig("openspec-project-md", ctx);
+  // Soft: the harness never reads project.md itself — OpenSpec does. A repo
+  // can run the harness end-to-end with this file absent; LLM agents will
+  // just lack the project-level context OpenSpec normally surfaces to them.
+  const gate = requireConfig("openspec-project-md", ctx, "soft");
   if ("skip" in gate) return gate.skip;
   const { config } = gate;
   const { existsSync } = await import("node:fs");
@@ -293,13 +296,13 @@ async function checkOpenspecProjectMd(ctx: DoctorContext): Promise<CheckResult> 
   if (!existsSync(path)) {
     return {
       name: "openspec-project-md",
-      tier: "hard",
-      status: "fail",
+      tier: "soft",
+      status: "warn",
       message: `${config.openspecDir}/project.md not found`,
-      hint: "run `npx -y @baton-tools/harness init`",
+      hint: "run `npx -y @baton-tools/harness init` to scaffold one (optional)",
     };
   }
-  return { name: "openspec-project-md", tier: "hard", status: "pass" };
+  return { name: "openspec-project-md", tier: "soft", status: "pass" };
 }
 
 async function checkOpenspecCli(_ctx: DoctorContext): Promise<CheckResult> {
@@ -731,7 +734,6 @@ const HARD_CHECKS: Check[] = [
   checkConfigPresent,
   checkConfigParses,
   checkOpenspecDir,
-  checkOpenspecProjectMd,
   checkOpenspecCli,
   makeVerifyCheck("lint"),
   makeVerifyCheck("typecheck"),
@@ -753,6 +755,7 @@ const SOFT_CHECKS: Check[] = [
   checkClaudeOnPath,
   checkPluginInstalled,
   checkSuperpowersInstalled,
+  checkOpenspecProjectMd,
 ];
 
 // Orchestrator -------------------------------------------------------------
@@ -814,10 +817,18 @@ function summarize(checks: CheckResult[]) {
 function requireConfig(
   name: string,
   ctx: DoctorContext,
+  tier: CheckTier = "hard",
 ): { skip: CheckResult } | { config: HarnessConfig } {
   if (ctx.configState.kind !== "ok") {
+    // A soft check skipped due to missing config reports `warn`, not `fail` —
+    // the check isn't itself a fail condition, it's just unable to run.
     return {
-      skip: { name, tier: "hard", status: "fail", message: "skipped: config unavailable" },
+      skip: {
+        name,
+        tier,
+        status: tier === "hard" ? "fail" : "warn",
+        message: "skipped: config unavailable",
+      },
     };
   }
   return { config: ctx.configState.config };
