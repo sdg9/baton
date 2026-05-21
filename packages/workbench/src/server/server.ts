@@ -1,6 +1,8 @@
 import express from 'express';
+import { existsSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { loadWorkbenchConfig } from './config/config';
 import { runDiagnostics } from './diagnostics';
 import { commitAndMergeDraft, createIdeaDraft, draftGitStatus, draftWorktreePath } from './ideas/drafts';
@@ -534,7 +536,13 @@ attachTerminalWebSocket(server, {
   markSessionRunning: (projectId, cardId) => sessionStore.markRunning(projectId, cardId)
 });
 
-app.use(express.static(join(root, 'dist', 'client')));
+const packageRoot = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
+const clientDir = join(packageRoot, 'dist', 'client');
+if (existsSync(join(clientDir, 'index.html'))) {
+  app.use(express.static(clientDir));
+} else {
+  console.warn(`[workbench] no built client at ${clientDir} — UI requests will 404. Run \`vite build\` first.`);
+}
 app.use((error: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   res.status(400).json({ error: error instanceof Error ? error.message : String(error) });
 });
