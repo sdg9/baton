@@ -1,0 +1,32 @@
+{
+  "name": "baton",
+  "owner": {
+    "name": "Steven Goff",
+    "url": "https://github.com/sdg9"
+  },
+  "metadata": {
+    "description": "Baton tools for spec-driven autonomous development with Claude Code.",
+    "version": "0.1.0"
+  },
+  "plugins": [
+    {
+      "name": "baton-harness",
+      "source": "./packages/harness/plugin",
+      "description": "Spec-driven autonomous-development harness: OpenSpec proposals -> frozen holdout contracts -> tier-aware adversarial review. Provides the autonomous-harness skill, reviewer subagents, and /harness, /openspec-propose, /finish-story commands.",
+      "version": "0.1.0",
+      "category": "development",
+      "tags": [
+        "openspec",
+        "spec-driven",
+        "autonomous-development",
+        "holdout",
+        "review"
+      ],
+      "homepage": "https://github.com/sdg9/baton/tree/main/packages/harness",
+      "license": "MIT",
+      "author": {
+        "name": "Steven Goff"
+      }
+    }
+  ]
+}
