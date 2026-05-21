@@ -1,0 +1,66 @@
+#!/bin/bash
+# Codex notify program -> Agent Workbench bridge.
+# Codex passes the event JSON as $1. cwd is the codex session's working dir.
+# Honors a cwd allowlist so this is a no-op outside approved repos.
+
+set -u
+
+WORKBENCH_URL="${WORKBENCH_URL:-http://127.0.0.1:4173}"
+ALLOWLIST_FILE="${WORKBENCH_NOTIFY_ALLOWLIST:-$HOME/.config/workbench/allowed-cwds}"
+
+# Built-in default allowlist (newline-separated path prefixes).
+# Empty by default — the workbench is no-op against any cwd until the user
+# writes an explicit allowlist to $WORKBENCH_NOTIFY_ALLOWLIST
+# (default: $HOME/.config/workbench/allowed-cwds).
+DEFAULT_ALLOWLIST=""
+
+EVENT_JSON="${1:-}"
+[ -z "$EVENT_JSON" ] && exit 0
+
+cwd_from_env="$(pwd 2>/dev/null || true)"
+if command -v jq >/dev/null 2>&1; then
+  cwd_from_event="$(printf '%s' "$EVENT_JSON" | jq -r '.cwd // ""' 2>/dev/null)"
+else
+  cwd_from_event=""
+fi
+cwd="${cwd_from_event:-$cwd_from_env}"
+[ -z "$cwd" ] && exit 0
+
+# Load allowlist (file overrides default if present).
+if [ -r "$ALLOWLIST_FILE" ]; then
+  allowlist="$(cat "$ALLOWLIST_FILE")"
+else
+  allowlist="$DEFAULT_ALLOWLIST"
+fi
+
+allowed=0
+while IFS= read -r prefix; do
+  [ -z "$prefix" ] && continue
+  case "$cwd" in
+    "$prefix"|"$prefix"/*) allowed=1; break ;;
+  esac
+done <<< "$allowlist"
+[ "$allowed" -eq 1 ] || exit 0
+
+if ! command -v jq >/dev/null 2>&1; then
+  exit 0
+fi
+
+event_type="$(printf '%s' "$EVENT_JSON" | jq -r '.type // "unknown"' 2>/dev/null)"
+message="$(printf '%s' "$EVENT_JSON" | jq -r '."last-assistant-message" // .message // ""' 2>/dev/null)"
+
+payload="$(jq -nc \
+  --arg agent "codex" \
+  --arg event "$event_type" \
+  --arg cwd "$cwd" \
+  --arg message "$message" \
+  --argjson raw "$EVENT_JSON" \
+  '{agent: $agent, event: $event, cwd: $cwd, message: $message, raw: $raw}' 2>/dev/null)"
+
+[ -z "$payload" ] && exit 0
+
+curl -fsS -m 3 -X POST "$WORKBENCH_URL/api/agent-event" \
+  -H 'content-type: application/json' \
+  --data "$payload" >/dev/null 2>&1 || true
+
+exit 0

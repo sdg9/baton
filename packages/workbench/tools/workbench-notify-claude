@@ -1,0 +1,36 @@
+#!/bin/bash
+# Claude Code hook -> Agent Workbench bridge.
+# Reads hook JSON from stdin, POSTs to /api/agent-event. Fail-silent.
+
+set -u
+
+WORKBENCH_URL="${WORKBENCH_URL:-http://127.0.0.1:4173}"
+
+EVENT_JSON="$(cat 2>/dev/null || true)"
+[ -z "$EVENT_JSON" ] && exit 0
+
+if ! command -v jq >/dev/null 2>&1; then
+  exit 0
+fi
+
+hook_event="$(printf '%s' "$EVENT_JSON" | jq -r '.hook_event_name // "Unknown"' 2>/dev/null)"
+cwd="$(printf '%s' "$EVENT_JSON" | jq -r '.cwd // ""' 2>/dev/null)"
+session_id="$(printf '%s' "$EVENT_JSON" | jq -r '.session_id // ""' 2>/dev/null)"
+message="$(printf '%s' "$EVENT_JSON" | jq -r '.message // ""' 2>/dev/null)"
+
+payload="$(jq -nc \
+  --arg agent "claude" \
+  --arg event "$hook_event" \
+  --arg cwd "$cwd" \
+  --arg sessionId "$session_id" \
+  --arg message "$message" \
+  --argjson raw "$EVENT_JSON" \
+  '{agent: $agent, event: $event, cwd: $cwd, sessionId: $sessionId, message: $message, raw: $raw}' 2>/dev/null)"
+
+[ -z "$payload" ] && exit 0
+
+curl -fsS -m 3 -X POST "$WORKBENCH_URL/api/agent-event" \
+  -H 'content-type: application/json' \
+  --data "$payload" >/dev/null 2>&1 || true
+
+exit 0

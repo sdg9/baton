@@ -1,0 +1,114 @@
+#!/usr/bin/env sh
+
+# Harness invariant: no commit may modify a frozen holdout file unless the
+# commit message starts with `holdouts(<story>)` and every touched holdout
+# belongs to that story.
+#
+# Why commit-msg (not pre-commit): pre-commit runs BEFORE the commit message
+# is obtained, so the message file is stale (holds the prior commit's
+# message) when pre-commit reads it. commit-msg receives the actual message
+# file as $1 and runs before the commit is finalized, so exiting non-zero
+# still aborts the commit.
+#
+# Holdout files are identified by BOTH:
+#   (a) a path matching one of the holdout glob patterns (default:
+#       *.holdout.test.* and *.holdout.spec.*), AND
+#   (b) the first line starting with `// @openspec-holdout`.
+# Path alone is not enough; marker alone is not enough.
+
+set -e
+
+# Skip during merge commits. Merge commits compose already-approved changes
+# from branches where holdout modifications were landed in `holdouts(...)`-
+# prefixed commits that passed this check in isolation.
+GIT_DIR=$(git rev-parse --git-dir 2>/dev/null || echo ".git")
+if [ -f "$GIT_DIR/MERGE_HEAD" ]; then
+  exit 0
+fi
+
+MSG_FILE="$1"
+COMMIT_MSG=""
+if [ -f "$MSG_FILE" ]; then
+  COMMIT_MSG=$(head -n 1 "$MSG_FILE" 2>/dev/null || echo "")
+fi
+
+HOLDOUT_STORY=""
+case "$COMMIT_MSG" in
+  holdouts\(*\)*)
+    HOLDOUT_STORY=${COMMIT_MSG#holdouts(}
+    HOLDOUT_STORY=${HOLDOUT_STORY%%)*}
+    ;;
+esac
+
+CHANGED=$(git diff --cached --name-only --diff-filter=ACMR)
+[ -z "$CHANGED" ] && exit 0
+
+VIOLATIONS=""
+CROSS_STORY_VIOLATIONS=""
+ALLOW_CROSS_STORY=""
+if [ -n "$HOLDOUT_STORY" ]; then
+  ALLOW_CROSS_STORY=$(sed -n 's/^breaking-sweep-allows:[[:space:]]*//p' "$MSG_FILE" 2>/dev/null || echo "")
+fi
+
+story_owns_holdout() {
+  story="$1"
+  path="$2"
+  marker="$3"
+  [ -n "$story" ] || return 1
+  case "$path" in
+    *"$story"*) return 0 ;;
+  esac
+  case "$marker" in
+    *"$story"*) return 0 ;;
+  esac
+  return 1
+}
+
+story_is_allowed_sweep() {
+  path="$1"
+  [ -n "$path" ] || return 1
+  for allowed in $ALLOW_CROSS_STORY; do
+    case "$path" in
+      *"$allowed"*) return 0 ;;
+    esac
+  done
+  return 1
+}
+
+for f in $CHANGED; do
+  [ -f "$f" ] || continue
+  case "$f" in
+    *.holdout.test.*|*.holdout.spec.*) ;;
+    *) continue ;;
+  esac
+  first_line=$(head -n 1 "$f" 2>/dev/null || echo "")
+  case "$first_line" in
+    "// @openspec-holdout"*)
+      if [ -n "$HOLDOUT_STORY" ]; then
+        if story_owns_holdout "$HOLDOUT_STORY" "$f" "$first_line" || story_is_allowed_sweep "$f"; then
+          continue
+        fi
+        CROSS_STORY_VIOLATIONS="$CROSS_STORY_VIOLATIONS\n  $f"
+      else
+        VIOLATIONS="$VIOLATIONS\n  $f"
+      fi
+      ;;
+  esac
+done
+
+if [ -n "$CROSS_STORY_VIOLATIONS" ]; then
+  printf "\nERROR: holdouts(%s) commit modifies holdout file(s) outside that story scope:%b\n" "$HOLDOUT_STORY" "$CROSS_STORY_VIOLATIONS"
+  printf "\nA holdouts(<story>) commit may only touch files whose path contains <story>.\n"
+  printf "For an intentional breaking sweep, add a commit body line:\n"
+  printf "breaking-sweep-allows: <path-or-story-token> [more-tokens]\n\n"
+  exit 1
+fi
+
+if [ -n "$VIOLATIONS" ]; then
+  printf "\nERROR: commit modifies frozen holdout file(s):%b\n" "$VIOLATIONS"
+  printf "\nHoldouts are the spec contract and cannot be edited during implementation.\n"
+  printf "If the spec is wrong, invalidate \`openspec/changes/<story>/approved\`, fix the spec, and regenerate holdouts.\n\n"
+  exit 1
+fi
+
+exit 0

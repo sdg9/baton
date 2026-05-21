@@ -1,0 +1,84 @@
+{
+  "name": "@baton-tools/workbench",
+  "version": "1.0.0",
+  "description": "Local-first web workbench for Kanban-driven Claude/Codex terminal sessions.",
+  "homepage": "https://github.com/sdg9/baton/tree/main/packages/workbench",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sdg9/baton.git",
+    "directory": "packages/workbench"
+  },
+  "type": "module",
+  "publishConfig": {
+    "access": "public"
+  },
+  "bin": {
+    "baton-workbench": "bin/baton-workbench.js"
+  },
+  "files": [
+    "bin",
+    "src",
+    "config",
+    "tools",
+    "index.html",
+    "vite.config.ts",
+    "vitest.config.ts",
+    "tsconfig.json",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "server": "tsx src/server/server.ts",
+    "start": "node bin/baton-workbench.js",
+    "build": "vite build",
+    "test": "vitest run",
+    "openspec:status": "openspec view",
+    "openspec:list": "openspec list",
+    "openspec:validate": "openspec validate --changes --strict --no-interactive",
+    "start:prompt": "node tools/print-start-prompt.mjs"
+  },
+  "keywords": [
+    "agent",
+    "kanban",
+    "terminal",
+    "openspec",
+    "codex",
+    "claude"
+  ],
+  "author": "Steven Goff",
+  "license": "MIT",
+  "dependencies": {
+    "@baton-tools/harness": "workspace:*",
+    "@lydell/node-pty": "^1.2.0-beta.12",
+    "@vitejs/plugin-react": "^6.0.1",
+    "@xterm/addon-fit": "^0.11.0",
+    "@xterm/addon-web-links": "^0.12.0",
+    "@xterm/xterm": "^6.0.0",
+    "better-sqlite3": "^12.10.0",
+    "chokidar": "^5.0.0",
+    "express": "^5.2.1",
+    "highlight.js": "^11.11.1",
+    "jsdom": "^29.1.1",
+    "react": "^19.2.6",
+    "react-dom": "^19.2.6",
+    "react-markdown": "^10.1.0",
+    "rehype-highlight": "^7.0.2",
+    "rehype-slug": "^6.0.0",
+    "remark-gfm": "^4.0.1",
+    "tsx": "^4.21.0",
+    "typescript": "^6.0.3",
+    "vite": "^8.0.11",
+    "vitest": "^4.1.5",
+    "ws": "^8.20.0",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/express": "^5.0.6",
+    "@types/node": "^25.6.2",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "@types/ws": "^8.18.1"
+  }
+}

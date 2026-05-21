@@ -1,0 +1,28 @@
+{
+  "agents": {
+    "claude": {
+      "label": "Claude Code",
+      "command": "claude",
+      "args": [],
+      "allowed": true
+    },
+    "codex": {
+      "label": "Codex",
+      "command": "codex",
+      "args": ["--dangerously-bypass-approvals-and-sandbox"],
+      "allowed": true
+    }
+  },
+  "session": {
+    "backend": "tmux",
+    "namePrefix": "baton-workbench",
+    "defaultShell": "/bin/zsh",
+    "idleNotificationSeconds": 30
+  },
+  "security": {
+    "bindHost": "127.0.0.1",
+    "requireAuth": true,
+    "trustedProxy": "cloudflare-access",
+    "auditLog": true
+  }
+}

@@ -1,0 +1,19 @@
+schema: spec-driven
+
+context: |
+  Project: Agent Workbench
+  Goal: local-first web Kanban for running Claude/Codex terminal sessions.
+  First adapter: OpenSpec changes from /path/to/your/project.
+  Expected runtime: browser UI, local Node/TypeScript server, WebSocket terminal streaming, xterm.js, tmux-backed PTY sessions.
+  Security posture: treat terminal control as remote shell access; bind to 127.0.0.1 by default; require explicit project and command allowlists; support Cloudflare Access at the tunnel edge.
+
+rules:
+  proposal:
+    - Include explicit non-goals when the change touches security or remote access.
+    - List every new capability that needs a spec file.
+  design:
+    - Include security decisions for auth, command allowlists, project allowlists, terminal IO, and audit logging.
+    - Prefer tmux-backed session durability unless a design gives a concrete reason not to.
+  tasks:
+    - Keep tasks independently verifiable.
+    - Include validation tasks for OpenSpec, typecheck/tests once code exists, and a local manual smoke.

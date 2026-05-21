@@ -1,0 +1,15 @@
+node_modules/
+dist/
+packages/*/node_modules/
+packages/*/dist/
+*.log
+.DS_Store
+
+# changesets cache
+.changeset/.cache/
+
+# transient state if someone runs the harness against this repo itself
+.claude/worktrees/
+.claude/harness-logs/
+.claude/reviewer-prompts/
+.claude/reviewer-outputs/

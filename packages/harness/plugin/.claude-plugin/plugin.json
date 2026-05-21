@@ -1,0 +1,8 @@
+{
+  "name": "baton-harness",
+  "version": "0.1.0",
+  "description": "Spec-driven autonomous-development harness: OpenSpec proposals → frozen holdout contracts → tier-aware adversarial review.",
+  "author": "Steven Goff",
+  "homepage": "https://github.com/sdg9/baton",
+  "license": "MIT"
+}
