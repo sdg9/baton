@@ -260,4 +260,12 @@ describe("runDoctor — verify-command checks", () => {
       expect(check?.message).toMatch(/skipped: config unavailable/i);
     }
   });
+
+  it("verify-lint strips leading env-var assignments before resolving the binary", async () => {
+    const cfg = JSON.parse(VALID_CONFIG_JSON);
+    cfg.verification.lint = "DEBUG=1 NODE_OPTIONS=--no-warnings node --version";
+    writeFileSync(join(dir, "harness.config.json"), JSON.stringify(cfg));
+    const report = await runDoctor(dir);
+    expect(report.checks.find((c) => c.name === "verify-lint")?.status).toBe("pass");
+  });
 });

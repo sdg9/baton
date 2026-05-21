@@ -346,7 +346,7 @@ function makeVerifyCheck(kind: VerificationKind): Check {
     // `FOO=bar cmd` for robustness against common patterns.
     const tokens = cmd.split(/\s+/);
     let i = 0;
-    while (i < tokens.length && /^[A-Z_][A-Z0-9_]*=/.test(tokens[i] ?? "")) i++;
+    while (i < tokens.length && /^[A-Za-z_][A-Za-z0-9_]*=/.test(tokens[i] ?? "")) i++;
     const firstToken = tokens[i];
     if (!firstToken) {
       return {
@@ -376,7 +376,7 @@ function makeVerifyCheck(kind: VerificationKind): Check {
 
 async function resolveBinary(token: string, cwd: string): Promise<string | null> {
   const { existsSync, statSync } = await import("node:fs");
-  const { resolve } = await import("node:path");
+  const { resolve, dirname } = await import("node:path");
 
   // 1. Absolute or cwd-relative path with separators — accept if executable.
   if (token.includes("/") || token.includes("\\")) {
@@ -385,11 +385,17 @@ async function resolveBinary(token: string, cwd: string): Promise<string | null>
     return null;
   }
 
-  // 2. cwd/node_modules/.bin/<token>
-  const local = resolve(cwd, "node_modules", ".bin", token);
-  if (existsSync(local)) return local;
-  // Also check Windows-style .cmd/.ps1 variants.
-  if (existsSync(`${local}.cmd`)) return `${local}.cmd`;
+  // 2. Walk up from cwd looking for node_modules/.bin/<token>. Handles pnpm/
+  //    Yarn workspaces where binaries are hoisted to the repo root.
+  let dir = resolve(cwd);
+  for (let i = 0; i < 10; i++) {
+    const local = resolve(dir, "node_modules", ".bin", token);
+    if (existsSync(local)) return local;
+    if (existsSync(`${local}.cmd`)) return `${local}.cmd`;
+    const parent = dirname(dir);
+    if (parent === dir) break; // reached filesystem root
+    dir = parent;
+  }
 
   // 3. PATH lookup — defer to `which`/`where`. Both return non-zero when not
   // found; we treat any non-zero as "not resolved".
