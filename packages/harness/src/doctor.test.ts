@@ -269,3 +269,45 @@ describe("runDoctor — verify-command checks", () => {
     expect(report.checks.find((c) => c.name === "verify-lint")?.status).toBe("pass");
   });
 });
+
+describe("runDoctor — soft filesystem checks", () => {
+  let dir: string;
+
+  beforeEach(() => {
+    dir = makeTempDir();
+    execFileSync("git", ["init", "--quiet"], { cwd: dir });
+    writeFileSync(join(dir, "harness.config.json"), VALID_CONFIG_JSON);
+  });
+
+  afterEach(() => {
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it("git-hook warns when .githooks/commit-msg is missing", async () => {
+    const report = await runDoctor(dir);
+    const hook = report.checks.find((c) => c.name === "git-hook");
+    expect(hook?.tier).toBe("soft");
+    expect(hook?.status).toBe("warn");
+  });
+
+  it("git-hook passes when .githooks/commit-msg exists and core.hooksPath is .githooks", async () => {
+    mkdirSync(join(dir, ".githooks"));
+    writeFileSync(join(dir, ".githooks", "commit-msg"), "#!/bin/sh\n", { mode: 0o755 });
+    execFileSync("git", ["config", "--local", "core.hooksPath", ".githooks"], { cwd: dir });
+    const report = await runDoctor(dir);
+    expect(report.checks.find((c) => c.name === "git-hook")?.status).toBe("pass");
+  });
+
+  it("gitignore-worktree warns when .gitignore does not cover worktreeDir", async () => {
+    writeFileSync(join(dir, ".gitignore"), "node_modules\n");
+    const report = await runDoctor(dir);
+    expect(report.checks.find((c) => c.name === "gitignore-worktree")?.status).toBe("warn");
+  });
+
+  it("gitignore-worktree passes when worktreeDir is covered", async () => {
+    writeFileSync(join(dir, ".gitignore"), ".claude/worktrees/\n.claude/harness-logs/\n");
+    const report = await runDoctor(dir);
+    expect(report.checks.find((c) => c.name === "gitignore-worktree")?.status).toBe("pass");
+    expect(report.checks.find((c) => c.name === "gitignore-logs")?.status).toBe("pass");
+  });
+});

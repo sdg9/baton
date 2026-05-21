@@ -409,6 +409,90 @@ async function resolveBinary(token: string, cwd: string): Promise<string | null>
   }
 }
 
+async function checkGitHook(ctx: DoctorContext): Promise<CheckResult> {
+  const { existsSync } = await import("node:fs");
+  const { resolve } = await import("node:path");
+  const hookPath = resolve(ctx.cwd, ".githooks", "commit-msg");
+  if (!existsSync(hookPath)) {
+    return {
+      name: "git-hook",
+      tier: "soft",
+      status: "warn",
+      message: ".githooks/commit-msg missing",
+      hint: "re-run `init --with-hook`",
+    };
+  }
+  // The hook will not fire unless core.hooksPath is set.
+  let hooksPath: string | null = null;
+  try {
+    const { stdout } = await execFileAsync(
+      "git",
+      ["config", "--local", "--get", "core.hooksPath"],
+      { cwd: ctx.cwd },
+    );
+    hooksPath = stdout.trim();
+  } catch {
+    // Key unset — git exits 1.
+  }
+  if (hooksPath !== ".githooks") {
+    return {
+      name: "git-hook",
+      tier: "soft",
+      status: "warn",
+      message: `core.hooksPath is "${hooksPath ?? "(unset)"}" — hook will not fire`,
+      hint: "git config --local core.hooksPath .githooks (or re-run `init --with-hook`)",
+    };
+  }
+  return { name: "git-hook", tier: "soft", status: "pass" };
+}
+
+function makeGitignoreCheck(
+  name: string,
+  pickPath: (ctx: DoctorContext) => string | undefined,
+  label: string,
+): Check {
+  const fn = async (ctx: DoctorContext): Promise<CheckResult> => {
+    if (ctx.configState.kind !== "ok") {
+      return { name, tier: "soft", status: "warn", message: "skipped: config unavailable" };
+    }
+    const target = pickPath(ctx);
+    if (!target) {
+      return { name, tier: "soft", status: "warn", message: `${label} not set in config` };
+    }
+    const { existsSync, readFileSync } = await import("node:fs");
+    const { resolve } = await import("node:path");
+    const gi = resolve(ctx.cwd, ".gitignore");
+    if (!existsSync(gi)) {
+      return {
+        name,
+        tier: "soft",
+        status: "warn",
+        message: ".gitignore not found",
+        hint: `echo '${target}/' >> .gitignore`,
+      };
+    }
+    const text = readFileSync(gi, "utf8");
+    const lines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+    // Match any line that equals the target (with or without trailing slash).
+    const normalized = target.replace(/\/$/, "");
+    const matched = lines.some(
+      (l) => l === normalized || l === `${normalized}/` || l === `/${normalized}` || l === `/${normalized}/`,
+    );
+    if (!matched) {
+      return {
+        name,
+        tier: "soft",
+        status: "warn",
+        message: `${target} not in .gitignore`,
+        hint: `echo '${target}/' >> .gitignore`,
+      };
+    }
+    return { name, tier: "soft", status: "pass" };
+  };
+  Object.defineProperty(fn, "name", { value: name.replace(/-/g, "_") });
+  return fn;
+}
+
 const HARD_CHECKS: Check[] = [
   checkGitRepo,
   checkNodeVersion,
@@ -423,7 +507,19 @@ const HARD_CHECKS: Check[] = [
   makeVerifyCheck("unit"),
   makeVerifyCheck("e2e"),
 ];
-const SOFT_CHECKS: Check[] = [];
+const SOFT_CHECKS: Check[] = [
+  checkGitHook,
+  makeGitignoreCheck(
+    "gitignore-worktree",
+    (ctx) => (ctx.configState.kind === "ok" ? ctx.configState.config.worktreeDir : undefined),
+    "worktreeDir",
+  ),
+  makeGitignoreCheck(
+    "gitignore-logs",
+    (ctx) => (ctx.configState.kind === "ok" ? ctx.configState.config.logDir : undefined),
+    "logDir",
+  ),
+];
 
 // Orchestrator -------------------------------------------------------------
 
