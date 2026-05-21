@@ -5,6 +5,13 @@ packages/*/dist/
 *.log
 .DS_Store
 
+# pnpm is the only supported package manager — keep npm/yarn lockfiles out so
+# `changeset publish` doesn't misdetect npm and ship `workspace:*` unresolved.
+package-lock.json
+yarn.lock
+packages/*/package-lock.json
+packages/*/yarn.lock
+
 # changesets cache
 .changeset/.cache/
 
