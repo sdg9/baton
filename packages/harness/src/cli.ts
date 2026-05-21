@@ -266,6 +266,8 @@ async function help(_args: string[] = []): Promise<number> {
       "  verify-all                run lint, typecheck, unit, e2e",
       "  verify <kind>             run one of: lint typecheck unit e2e",
       "  diff <story>              print diff of story branch vs base",
+      "  doctor [--json] [--cwd=<path>]",
+      "                            verify the install: config, openspec, external CLIs, verify cmds",
       "  holdout-check             refuse if uncommitted/staged diff touches a holdout",
       "  holdout-validate <story> [--scope=story|repo]",
       "                            static-scan holdouts for the 3 documented antipatterns",

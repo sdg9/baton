@@ -23,3 +23,11 @@ export { loadConfig, loadMinimalConfig, MODEL_DEFAULTS, REVIEW_PROFILE_DEFAULTS 
 export { parseTier, loadChange } from "./openspec.js";
 export { checkDiffScope, requiresFullVerification, mergeToMain } from "./merge-to-main.js";
 export { validateHoldoutSuite } from "./holdout-validate.js";
+export { runDoctor, renderHuman, renderJson } from "./doctor.js";
+export type {
+  CheckResult,
+  CheckStatus,
+  CheckTier,
+  DoctorReport,
+  RunDoctorOptions,
+} from "./doctor.js";
