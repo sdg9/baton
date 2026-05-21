@@ -1,5 +1,11 @@
 # @baton-tools/workbench
 
+## 1.2.0
+
+### Minor Changes
+
+- `npx @baton-tools/workbench@latest` now boots with safe built-in defaults (claude as the only agent, tmux backend, `127.0.0.1` bind, auth + audit on, empty project list) when `config/agents.json` and `config/projects.json` are absent — no more `ENOENT agents.example.json`. Any file the user provides still takes precedence; a startup log line announces when a default is in use.
+
 ## 1.1.1
 
 ### Patch Changes
