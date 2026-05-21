@@ -1,5 +1,11 @@
 # @baton-tools/harness
 
+## 0.2.1
+
+### Patch Changes
+
+- `baton-harness doctor` polish: colorize PASS/FAIL/WARN tags in TTY output (no color when piped or when `NO_COLOR` is set), and fix plugin detection to find `.claude-plugin/plugin.json` at the actual nesting depth used by Claude Code 2.x.
+
 ## 0.2.0
 
 ### Minor Changes
