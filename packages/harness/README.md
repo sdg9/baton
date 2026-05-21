@@ -239,6 +239,7 @@ Run `baton-harness help` for the full list. The ones you'll use directly:
 | `holdout-check`                          | Refuse if any commit on the branch after `holdouts(...)` touched a holdout.  |
 | `holdout-validate <story>`               | Static-scan holdouts for the 3 documented antipatterns.                      |
 | `diff <story>`                           | Print `git diff <base>...HEAD` in the worktree.                              |
+| `doctor [--json] [--cwd=<path>]`         | Verify the install: config, openspec scaffold, external CLIs, verify commands, optional Claude Code plugin/superpowers detection. Exit 1 on any hard failure. |
 | `result <story>` / `handoff <story>`     | Write HARNESS_RESULT.md (green) or HANDOFF.md (red) in the worktree.         |
 | `merge-to-main <story> [--fast]`         | Tier-scope guardrail + `--no-ff` merge + post-merge verify (rollback on fail). |
 | `finish <story>`                         | After merge: openspec archive + worktree-remove + branch -d.                 |
