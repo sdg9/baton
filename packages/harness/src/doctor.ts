@@ -1,10 +1,9 @@
 import { execFile } from "node:child_process";
 import { readFile } from "node:fs/promises";
-import { dirname, resolve } from "node:path";
+import { basename, dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import type { HarnessConfig, VerificationKind } from "./types.js";
-import { HarnessConfigError } from "./types.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -28,11 +27,10 @@ export interface DoctorReport {
   checks: CheckResult[];
 }
 
-export interface RunDoctorOptions {
+export type RunDoctorOptions = {
   // Reserved for future flags (e.g. skipping plugin detection in CI).
-  // Empty for now — kept on the signature so adding flags later is a
-  // non-breaking change.
-}
+  // Empty object type for now — adding fields later is a non-breaking change.
+};
 
 // Internal context ----------------------------------------------------------
 
@@ -81,10 +79,7 @@ async function resolveConfigState(cwd: string): Promise<ConfigState> {
     const config = await loadConfig(path);
     return { kind: "ok", config, path };
   } catch (err) {
-    const message =
-      err instanceof HarnessConfigError || err instanceof Error
-        ? err.message
-        : String(err);
+    const message = err instanceof Error ? err.message : String(err);
     return { kind: "error", message, path };
   }
 }
@@ -226,8 +221,8 @@ async function checkConfigPresent(ctx: DoctorContext): Promise<CheckResult> {
     };
   }
   // Both "ok" and "error" mean a file exists.
-  const path = ctx.configState.kind === "ok" ? ctx.configState.path : ctx.configState.path;
-  const filename = path.split("/").pop() ?? path;
+  const path = ctx.configState.path;
+  const filename = basename(path);
   return {
     name: "config-present",
     tier: "hard",
