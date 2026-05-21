@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { renderHuman, renderJson, runDoctor } from "./doctor.js";
+import { _resetPluginScanCacheForTests, renderHuman, renderJson, runDoctor } from "./doctor.js";
 
 function makeTempDir(): string {
   return mkdtempSync(join(tmpdir(), "harness-doctor-test-"));
@@ -373,6 +373,71 @@ describe("runDoctor — soft env/plugin checks", () => {
       }
     } finally {
       rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("finds plugins via .claude-plugin/plugin.json at real Claude 2.x depth", async () => {
+    // Real layout from `find ~/.claude/plugins -name plugin.json`:
+    //   cache/<marketplace>/<plugin>/<version>/.claude-plugin/plugin.json
+    //   marketplaces/<marketplace>/plugins/<plugin>/.claude-plugin/plugin.json
+    // The pre-fix doctor had depth cap < 4 and looked for a loose plugin.json
+    // — both wrong. This test pins the corrected behavior.
+    const fakeHome = makeTempDir();
+    const originalHome = process.env.HOME;
+    try {
+      process.env.HOME = fakeHome;
+      // The plugin scan is memoized by HOME. Other tests already populated
+      // an entry for the real HOME; this test runs against a synthetic
+      // homedir we just built, so its entry doesn't exist yet — but a
+      // belt-and-braces reset keeps the test resilient to future ordering.
+      _resetPluginScanCacheForTests();
+      // baton-harness in marketplaces/ (depth 4 to manifest)
+      const batonDir = join(
+        fakeHome,
+        ".claude",
+        "plugins",
+        "marketplaces",
+        "baton",
+        "plugins",
+        "baton-harness",
+        ".claude-plugin",
+      );
+      mkdirSync(batonDir, { recursive: true });
+      writeFileSync(join(batonDir, "plugin.json"), JSON.stringify({ name: "baton-harness" }));
+      // superpowers in cache/ (depth 5 to manifest — exercises the old <4 cap)
+      const spDir = join(
+        fakeHome,
+        ".claude",
+        "plugins",
+        "cache",
+        "claude-plugins-official",
+        "superpowers",
+        "5.1.0",
+        ".claude-plugin",
+      );
+      mkdirSync(spDir, { recursive: true });
+      writeFileSync(join(spDir, "plugin.json"), JSON.stringify({ name: "superpowers" }));
+
+      const dir = makeTempDir();
+      try {
+        const report = await runDoctor(dir);
+        const baton = report.checks.find((c) => c.name === "plugin-installed");
+        const sp = report.checks.find((c) => c.name === "superpowers-installed");
+        expect(baton?.status).toBe("pass");
+        expect(baton?.message).toContain("baton-harness");
+        expect(sp?.status).toBe("pass");
+        expect(sp?.message).toContain("superpowers");
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    } finally {
+      if (originalHome === undefined) delete process.env.HOME;
+      else process.env.HOME = originalHome;
+      // Reset again so subsequent tests don't see the synthetic homedir's
+      // cached map (which would falsely report baton-harness and superpowers
+      // as installed at /tmp/...).
+      _resetPluginScanCacheForTests();
+      rmSync(fakeHome, { recursive: true, force: true });
     }
   });
 

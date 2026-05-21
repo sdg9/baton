@@ -42,10 +42,17 @@ type ConfigState =
 interface DoctorContext {
   cwd: string;
   configState: ConfigState;
+  /** name → install path. Built once at context time so we walk
+   *  ~/.claude/plugins/ a single time, no matter how many plugin checks fire. */
+  installedPlugins: Map<string, string>;
 }
 
 async function buildContext(cwd: string): Promise<DoctorContext> {
-  return { cwd, configState: await resolveConfigState(cwd) };
+  const [configState, installedPlugins] = await Promise.all([
+    resolveConfigState(cwd),
+    scanInstalledPlugins(),
+  ]);
+  return { cwd, configState, installedPlugins };
 }
 
 async function resolveConfigState(cwd: string): Promise<ConfigState> {
@@ -511,87 +518,128 @@ async function checkClaudeOnPath(_ctx: DoctorContext): Promise<CheckResult> {
   }
 }
 
-async function findPluginUnder(root: string, pluginName: string): Promise<string | null> {
-  // Best-effort: walk a small subtree under ~/.claude/plugins/ looking for a
-  // plugin.json whose `name` matches. Layout has changed across Claude Code
-  // versions; we tolerate up to 4 levels of nesting.
-  const { existsSync, readdirSync, statSync, readFileSync } = await import("node:fs");
+const PLUGIN_MANIFEST_DIRS = [".claude-plugin", ".cursor-plugin", ".codex-plugin"] as const;
+const PLUGIN_SCAN_MAX_DEPTH = 7;
+
+// Module-level cache keyed by HOME. The plugin scan is the slowest part of
+// buildContext on machines with large ~/.claude/plugins trees, and the result
+// is stable across runDoctor calls in a single process. The CLI invokes
+// runDoctor exactly once so this is a pure test/Workbench win — but it makes
+// repeated calls cheap. Keyed by HOME so the test that sets HOME to a fake
+// tree gets its own cache entry.
+const PLUGIN_SCAN_CACHE = new Map<string, Map<string, string>>();
+/** Clears the plugin-scan cache. Exposed for tests that mutate HOME and
+ *  want a fresh scan. */
+export function _resetPluginScanCacheForTests(): void {
+  PLUGIN_SCAN_CACHE.clear();
+}
+
+/**
+ * Walk ~/.claude/plugins/ once, returning a map of plugin name → install path
+ * (the directory that *contains* the manifest folder, e.g. the `<plugin>/`
+ * dir, not the `.claude-plugin/` sub-folder).
+ *
+ * Real layouts observed in Claude Code 2.x — manifest depth measured from
+ * ~/.claude/plugins/:
+ *   cache/<marketplace>/<plugin>/<version>/.claude-plugin/plugin.json     (5)
+ *   marketplaces/<marketplace>/plugins/<plugin>/.claude-plugin/plugin.json (4)
+ *   marketplaces/<mp>/external_plugins/<plugin>/.claude-plugin/plugin.json (4)
+ *
+ * Why this exists as a one-shot scan: doctor calls multiple plugin checks
+ * (baton-harness, superpowers, possibly more). Each used to do its own BFS;
+ * with the depth cap raised to 7 and large plugin trees in the wild, that
+ * cost compounded. One pass + a map is O(dirs) regardless of how many
+ * plugin checks read it.
+ *
+ * Uses readdirSync(withFileTypes:true) so each directory is one syscall
+ * instead of one readdir + N statSync.
+ */
+async function scanInstalledPlugins(): Promise<Map<string, string>> {
+  const { existsSync, readdirSync, readFileSync } = await import("node:fs");
+  const { homedir } = await import("node:os");
   const { join: pjoin } = await import("node:path");
-  if (!existsSync(root)) return null;
+  const home = homedir();
+  const cached = PLUGIN_SCAN_CACHE.get(home);
+  if (cached) return cached;
+
+  const found = new Map<string, string>();
+  const root = pjoin(home, ".claude", "plugins");
+  if (!existsSync(root)) {
+    PLUGIN_SCAN_CACHE.set(home, found);
+    return found;
+  }
+
   const queue: Array<{ path: string; depth: number }> = [{ path: root, depth: 0 }];
   while (queue.length > 0) {
     const { path, depth } = queue.shift()!;
-    let entries: string[];
+    let entries: Array<{ name: string; isDirectory: () => boolean; isFile: () => boolean }>;
     try {
-      entries = readdirSync(path);
+      entries = readdirSync(path, { withFileTypes: true });
     } catch {
       continue;
     }
-    if (entries.includes("plugin.json")) {
-      try {
-        const json = JSON.parse(readFileSync(pjoin(path, "plugin.json"), "utf8")) as {
-          name?: string;
-        };
-        if (json.name === pluginName) return path;
-      } catch {
-        // ignore
+    // Check this dir's manifest sources before descending.
+    for (const entry of entries) {
+      if (entry.name === "plugin.json" && entry.isFile()) {
+        // Older / flatter layout: plugin.json directly in the plugin dir.
+        readManifestInto(found, pjoin(path, "plugin.json"), path, readFileSync);
+      } else if (
+        (PLUGIN_MANIFEST_DIRS as readonly string[]).includes(entry.name) &&
+        entry.isDirectory()
+      ) {
+        readManifestInto(found, pjoin(path, entry.name, "plugin.json"), path, readFileSync);
       }
     }
-    if (depth < 4) {
-      for (const name of entries) {
-        const child = pjoin(path, name);
-        try {
-          if (statSync(child).isDirectory()) queue.push({ path: child, depth: depth + 1 });
-        } catch {
-          // ignore
-        }
-      }
+    if (depth >= PLUGIN_SCAN_MAX_DEPTH) continue;
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue;
+      if ((PLUGIN_MANIFEST_DIRS as readonly string[]).includes(entry.name)) continue;
+      queue.push({ path: pjoin(path, entry.name), depth: depth + 1 });
     }
   }
-  return null;
+  PLUGIN_SCAN_CACHE.set(home, found);
+  return found;
 }
 
-async function checkPluginInstalled(_ctx: DoctorContext): Promise<CheckResult> {
-  const { homedir } = await import("node:os");
-  const { join: pjoin } = await import("node:path");
-  const { existsSync } = await import("node:fs");
-  const root = pjoin(homedir(), ".claude", "plugins");
-  if (!existsSync(root)) {
-    return {
-      name: "plugin-installed",
-      tier: "soft",
-      status: "warn",
-      message: `could not introspect ${root}`,
-      hint: "/plugin install baton-harness@baton",
-    };
+function readManifestInto(
+  out: Map<string, string>,
+  manifestPath: string,
+  installPath: string,
+  readFileSync: (p: string, enc: "utf8") => string,
+): void {
+  try {
+    const json = JSON.parse(readFileSync(manifestPath, "utf8")) as { name?: string };
+    if (typeof json.name === "string" && !out.has(json.name)) {
+      // First match wins. With cache/ enumerated before marketplaces/ (depends
+      // on readdir order), this typically captures the installed copy first;
+      // the marketplaces/ entry is a definition, the cache/ entry is the
+      // unpacked install. Either is a valid signal of "installed."
+      out.set(json.name, installPath);
+    }
+  } catch {
+    // missing file or malformed JSON — skip silently. A plugin without a
+    // readable manifest is effectively not installed for our purposes.
   }
-  const found = await findPluginUnder(root, "baton-harness");
+}
+
+async function checkPluginInstalled(ctx: DoctorContext): Promise<CheckResult> {
+  const found = ctx.installedPlugins.get("baton-harness");
   if (found) {
     return { name: "plugin-installed", tier: "soft", status: "pass", message: found };
   }
+  const { homedir } = await import("node:os");
+  const { join: pjoin } = await import("node:path");
   return {
     name: "plugin-installed",
     tier: "soft",
     status: "warn",
-    message: `baton-harness plugin not found under ${root}`,
+    message: `baton-harness plugin not found under ${pjoin(homedir(), ".claude", "plugins")}`,
     hint: "/plugin install baton-harness@baton",
   };
 }
 
-async function checkSuperpowersInstalled(_ctx: DoctorContext): Promise<CheckResult> {
-  const { homedir } = await import("node:os");
-  const { join: pjoin } = await import("node:path");
-  const { existsSync } = await import("node:fs");
-  const root = pjoin(homedir(), ".claude", "plugins");
-  if (!existsSync(root)) {
-    return {
-      name: "superpowers-installed",
-      tier: "soft",
-      status: "warn",
-      message: `could not introspect ${root}`,
-    };
-  }
-  const found = await findPluginUnder(root, "superpowers");
+async function checkSuperpowersInstalled(ctx: DoctorContext): Promise<CheckResult> {
+  const found = ctx.installedPlugins.get("superpowers");
   if (found) {
     return { name: "superpowers-installed", tier: "soft", status: "pass", message: found };
   }
