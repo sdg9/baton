@@ -225,7 +225,7 @@ async function help(_args: string[] = []): Promise<number> {
   console.log(
     [
       "baton-harness subcommands:",
-      "  init [--force] [--with-husky]",
+      "  init [--force] [--with-hook]",
       "                            scaffold harness.config.ts + openspec/ + commit-msg hook",
       "  status <story>            check spec + approval + holdouts readiness",
       "  approve <story>           mark story approved (writes approved sentinel)",

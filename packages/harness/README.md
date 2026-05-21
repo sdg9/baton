@@ -15,7 +15,7 @@ Extracted from a production game project that has shipped 60+ stories through th
   - `autonomous-harness` skill — the orchestrator playbook.
   - Reviewer subagents (`code-reviewer`, `architect-review`, `security-auditor`) for parallel adversarial review.
   - Slash commands: `/harness <story>`, `/openspec-propose <name>`, `/finish-story <story>`.
-- **Templates** for the initial scaffold: `harness.config.ts`, `openspec/project.md`, a `.husky/commit-msg` holdout-frozen check, proposal/spec/tasks templates.
+- **Templates** for the initial scaffold: `harness.config.ts`, `openspec/project.md`, a `.githooks/commit-msg` holdout-frozen check (no husky dependency — `init --with-hook` sets `core.hooksPath` for you), proposal/spec/tasks templates.
 
 ## Conceptual model
 
@@ -73,7 +73,8 @@ The recommended path skips `npm install` in the consuming repo entirely. The Cla
 #    /plugin install baton-harness@baton
 
 # 2. Scaffold harness.config.ts + openspec/ + commit-msg hook in your repo
-npx -y @baton-tools/harness init --with-husky
+#    --with-hook installs .githooks/commit-msg AND sets git config core.hooksPath.
+npx -y @baton-tools/harness init --with-hook
 
 # 3. Edit harness.config.ts to point at YOUR verify commands and tier rules
 $EDITOR harness.config.ts
@@ -219,7 +220,7 @@ Common per-repo customizations:
 ├── templates/                    # what `baton-harness init` lays down
 │   ├── harness.config.ts
 │   ├── openspec/project.md
-│   ├── .husky/commit-msg
+│   ├── .githooks/commit-msg
 │   └── {proposal,spec,tasks}-template.md
 └── bin/baton-harness.js          # node shim → dist/cli.js
 ```
@@ -230,7 +231,7 @@ Run `baton-harness help` for the full list. The ones you'll use directly:
 
 | Command                                  | What it does                                                                 |
 | ---------------------------------------- | ---------------------------------------------------------------------------- |
-| `init [--with-husky]`                    | Scaffold harness.config.ts + openspec/ + commit-msg hook in cwd.             |
+| `init [--with-hook]`                     | Scaffold harness.config.ts + openspec/ + commit-msg hook (sets `core.hooksPath` when `--with-hook` is passed). |
 | `status <story>`                         | JSON: paths, tier, holdout globs, branch name, models. Exit 1 if unapproved. |
 | `approve <story>` / `unapprove <story>`  | Mark/unmark a proposal as ready for the harness.                             |
 | `worktree-create <story>`                | `git worktree add` + symlink node_modules. Refuses if main is dirty.         |

@@ -5,6 +5,7 @@
 // pre-commit hook without copy-paste boilerplate. Idempotent: skips files
 // that already exist unless --force is passed.
 
+import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { copyFile, mkdir, readdir, stat } from "node:fs/promises";
 import { dirname, join, relative, resolve } from "node:path";
@@ -29,6 +30,53 @@ function locateTemplatesDir(): string {
     dir = dirname(dir);
   }
   throw new Error("baton-harness init: could not locate templates/ directory");
+}
+
+/**
+ * Set the consuming repo's local `core.hooksPath` to `.githooks` so the
+ * commit-msg hook fires on every commit. If the key is already set to
+ * something other than `.githooks`, leave it alone and tell the user —
+ * silently overwriting could break an existing hooks setup.
+ */
+function configureHooksPath(cwd: string): void {
+  const desired = ".githooks";
+  let current: string | null = null;
+  try {
+    current = execFileSync("git", ["config", "--local", "--get", "core.hooksPath"], {
+      cwd,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    }).trim();
+  } catch {
+    // `git config --get` exits 1 when the key is unset, or when this isn't a
+    // git repo at all. We disambiguate below by trying the `set` and checking
+    // its error.
+  }
+
+  if (current === desired) {
+    process.stdout.write(`  [skip] git config core.hooksPath (already ${desired})\n`);
+    return;
+  }
+  if (current && current !== desired) {
+    process.stdout.write(
+      `\n  ⚠ git config core.hooksPath is set to "${current}" — leaving it alone.\n` +
+        `    Set it to "${desired}" manually (or remove the existing value) to activate the hook.\n`,
+    );
+    return;
+  }
+
+  try {
+    execFileSync("git", ["config", "--local", "core.hooksPath", desired], {
+      cwd,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    process.stdout.write(`  [config] git config core.hooksPath -> ${desired}\n`);
+  } catch {
+    process.stdout.write(
+      `\n  ⚠ couldn't run \`git config --local core.hooksPath ${desired}\`.\n` +
+        `    Not a git repo? Run \`git init\` first and then \`git config core.hooksPath ${desired}\`.\n`,
+    );
+  }
 }
 
 async function copyRecursive(src: string, dest: string, force: boolean): Promise<string[]> {
@@ -79,29 +127,38 @@ export async function init(args: string[]): Promise<number> {
   await copyRecursive(openspecSrc, openspecDest, force);
   await mkdir(join(openspecDest, "changes"), { recursive: true });
 
-  // 3. .husky/commit-msg hook (only if .husky exists OR --with-husky).
-  const huskyDir = join(cwd, ".husky");
-  if (existsSync(huskyDir) || args.includes("--with-husky")) {
-    await mkdir(huskyDir, { recursive: true });
-    const hookSrc = join(templatesDir, ".husky", "commit-msg");
-    const hookDest = join(huskyDir, "commit-msg");
+  // 3. .githooks/commit-msg hook (only if .githooks/ exists OR --with-hook).
+  //
+  // The hook itself is a plain POSIX shell script — no husky dependency. We
+  // place it under .githooks/ and (when --with-hook is passed) point
+  // core.hooksPath at that directory so the hook fires on every commit in
+  // the consuming repo with no extra install steps.
+  const gitHooksDir = join(cwd, ".githooks");
+  const wantsHook = args.includes("--with-hook");
+  if (existsSync(gitHooksDir) || wantsHook) {
+    await mkdir(gitHooksDir, { recursive: true });
+    const hookSrc = join(templatesDir, ".githooks", "commit-msg");
+    const hookDest = join(gitHooksDir, "commit-msg");
     if (existsSync(hookDest) && !force) {
       process.stdout.write(
-        `  [skip] .husky/commit-msg (already exists — merge holdout-frozen check by hand)\n`,
+        `  [skip] .githooks/commit-msg (already exists — merge holdout-frozen check by hand)\n`,
       );
     } else {
       await copyFile(hookSrc, hookDest);
-      // chmod +x best-effort
       try {
         await (await import("node:fs/promises")).chmod(hookDest, 0o755);
       } catch {
         /* ignore */
       }
-      process.stdout.write(`  [write] .husky/commit-msg (holdout-frozen check)\n`);
+      process.stdout.write(`  [write] .githooks/commit-msg (holdout-frozen check)\n`);
+    }
+
+    if (wantsHook) {
+      configureHooksPath(cwd);
     }
   } else {
     process.stdout.write(
-      "\n  Tip: install husky and re-run with --with-husky to add the holdout-frozen pre-commit hook.\n",
+      "\n  Tip: re-run with --with-hook to install the holdout-frozen commit-msg hook (no husky required).\n",
     );
   }
 
