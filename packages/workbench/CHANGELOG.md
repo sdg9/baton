@@ -1,5 +1,11 @@
 # @baton-tools/workbench
 
+## 1.2.1
+
+### Patch Changes
+
+- Ship the built client in the npm tarball and serve it from the package install directory, not `process.cwd()`. Fixes "Cannot GET /" when running `npx @baton-tools/workbench@latest` from outside the monorepo.
+
 ## 1.2.0
 
 ### Minor Changes
