@@ -34,6 +34,7 @@ const commands: Record<string, Command> = {
   "verify-all": verifyAll,
   verify,
   diff,
+  doctor: doctorCmd,
   "holdout-check": holdoutCheck,
   "holdout-validate": holdoutValidateCmd,
   "log-event": logEvent,
@@ -57,6 +58,36 @@ async function initCmd(args: string[]): Promise<number> {
 async function runQueueCmd(args: string[]): Promise<number> {
   const { runQueue } = await import("./run-queue.js");
   return runQueue(args);
+}
+
+async function doctorCmd(args: string[]): Promise<number> {
+  let cwd = process.cwd();
+  let asJson = false;
+  for (const arg of args) {
+    if (arg === "--json") {
+      asJson = true;
+      continue;
+    }
+    if (arg.startsWith("--cwd=")) {
+      cwd = arg.slice("--cwd=".length);
+      continue;
+    }
+    if (arg === "--cwd") {
+      process.stderr.write("doctor: --cwd requires a value (use --cwd=<path>)\n");
+      return 2;
+    }
+    process.stderr.write(`doctor: unknown argument "${arg}"\n`);
+    return 2;
+  }
+
+  const { runDoctor, renderHuman, renderJson } = await import("./doctor.js");
+  const report = await runDoctor(cwd);
+  if (asJson) {
+    process.stdout.write(`${renderJson(report)}\n`);
+  } else {
+    process.stdout.write(`${renderHuman(report)}\n`);
+  }
+  return report.ok ? 0 : 1;
 }
 
 async function getChangedPaths(baseBranch: string, branch: string): Promise<string[]> {
