@@ -1,7 +1,7 @@
 {
   "name": "@baton-tools/workbench",
-  "version": "1.2.1",
-  "description": "Local-first web workbench for Kanban-driven Claude/Codex terminal sessions.",
+  "version": "1.3.0",
+  "description": "Local-first web workbench for Kanban-driven Claude Code terminal sessions.",
   "homepage": "https://github.com/sdg9/baton/tree/main/packages/workbench",
   "repository": {
     "type": "git",

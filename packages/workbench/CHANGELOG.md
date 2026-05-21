@@ -1,5 +1,12 @@
 # @baton-tools/workbench
 
+## 1.3.0
+
+### Minor Changes
+
+- - Auto-register `process.cwd()` as a project when it contains an `openspec/` directory and no `config/projects.json` is present. Running `npx @baton-tools/workbench@latest` from a project root now shows that project's openspec changes on the board instead of an empty kanban.
+  - Drop codex from the product surface. The add-card dropdown defaults to claude, the topbar copy says "Claude" not "Claude/Codex", the example configs and keywords no longer mention codex, and the codex notify-bridge script is removed.
+
 ## 1.2.1
 
 ### Patch Changes
