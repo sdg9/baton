@@ -499,7 +499,7 @@ async function finish(args: string[]): Promise<number> {
       },
     },
     {
-      label: `post-process archived specs + INBOX for ${story}`,
+      label: `post-process archived specs for ${story}`,
       run: async () => {
         const report = await finishPostProcess({
           story,
@@ -509,11 +509,6 @@ async function finish(args: string[]): Promise<number> {
         });
         for (const p of report.processedSpecs) {
           console.log(`[OK] post-processed ${p}`);
-        }
-        if (report.prunedBacklogEntries.length > 0) {
-          console.log(
-            `[OK] pruned ${report.prunedBacklogEntries.length} INBOX entries for ${story}: ${report.prunedBacklogEntries.join(", ")}`,
-          );
         }
         for (const a of report.deletedArtifacts) {
           console.log(`[OK] deleted ${a}`);
@@ -679,8 +674,7 @@ async function resolveReviewProfile(
   if (!profiles) return undefined;
   // Story can declare a profile by writing the profile name to
   // `<changePath>/review-profile` (single-line text file). If absent, fall
-  // back to "default". The orchestrator can augment this lookup (e.g. via
-  // INBOX epic match) before dispatching reviewers.
+  // back to "default".
   const profileFile = join(changePath, "review-profile");
   let name = "default";
   if (existsSync(profileFile)) {

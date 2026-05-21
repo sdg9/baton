@@ -2,8 +2,7 @@
  * Post-condition guard for `openspec archive <story>`.
  *
  * `npx @fission-ai/openspec archive` has been observed to exit 0 without
- * moving the change folder (see BACKLOG: "harness finish: openspec archive
- * step is a silent no-op"). Three stories shipped fully but their proposal
+ * moving the change folder (silent no-op). Three stories shipped fully but their proposal
  * folders stayed under `openspec/changes/<story>/` with the `approved`
  * sentinel intact, making them look approved-but-unstarted on next read.
  *

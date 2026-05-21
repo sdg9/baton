@@ -39,10 +39,6 @@ export interface AutopilotRunLog {
   stoppingReason?: string;
   stories: StoryRunLog[];
   mainSideCommits: MainSideCommit[];
-  backlogChurn: {
-    added: string[];
-    removed: string[];
-  };
 }
 
 // ---------------------------------------------------------------------------
@@ -140,28 +136,6 @@ export function assembleReport(log: AutopilotRunLog): string {
     for (const c of unreconciled) {
       lines.push(`- \`${c.sha}\` ${c.message}`);
     }
-    lines.push("");
-  }
-
-  // BACKLOG churn
-  lines.push("## BACKLOG Churn");
-  lines.push("");
-  if (log.backlogChurn.added.length > 0) {
-    lines.push("**Added:**");
-    for (const item of log.backlogChurn.added) {
-      lines.push(`- ${item}`);
-    }
-    lines.push("");
-  }
-  if (log.backlogChurn.removed.length > 0) {
-    lines.push("**Removed:**");
-    for (const item of log.backlogChurn.removed) {
-      lines.push(`- ${item}`);
-    }
-    lines.push("");
-  }
-  if (log.backlogChurn.added.length === 0 && log.backlogChurn.removed.length === 0) {
-    lines.push("(no churn)");
     lines.push("");
   }
 

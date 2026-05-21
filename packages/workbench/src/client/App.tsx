@@ -3,7 +3,6 @@ import './styles.css';
 import { FitAddon } from '@xterm/addon-fit';
 import { Terminal } from '@xterm/xterm';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { InboxView } from './InboxView';
 import { createRoot } from 'react-dom/client';
 import ReactMarkdown from 'react-markdown';
 import rehypeHighlight from 'rehype-highlight';
@@ -139,7 +138,7 @@ type TmuxSession = {
   updatedAt: string;
 };
 
-type ViewMode = 'board' | 'tmux' | 'completed' | 'worktrees' | 'inbox';
+type ViewMode = 'board' | 'tmux' | 'completed' | 'worktrees';
 
 type ArchivedChange = {
   projectId: string;
@@ -472,11 +471,6 @@ function App() {
   }));
   const projectId = columns.flatMap((column) => column.cards)[0]?.projectId ?? '';
   const addCardAgents = columns.flatMap((column) => column.cards)[0]?.allowedAgents ?? ['claude', 'codex'];
-  const inboxProjects = useMemo(() => {
-    const seen = new Map<string, string>();
-    for (const col of columns) for (const card of col.cards) seen.set(card.projectId, card.projectName);
-    return Array.from(seen, ([id, name]) => ({ id, name }));
-  }, [columns]);
   const visibleTmuxSessions = tmuxSessions.slice(tmuxPage * tmuxLayout, tmuxPage * tmuxLayout + tmuxLayout);
   const maxTmuxPage = Math.max(0, Math.ceil(tmuxSessions.length / tmuxLayout) - 1);
   const docPanelCard = docPanelTarget?.type === 'card'
@@ -533,7 +527,6 @@ function App() {
         <button className={viewMode === 'tmux' ? 'active' : ''} onClick={() => setViewMode('tmux')}>Tmux</button>
         <button className={viewMode === 'completed' ? 'active' : ''} onClick={() => setViewMode('completed')}>Completed</button>
         <button className={viewMode === 'worktrees' ? 'active' : ''} onClick={() => setViewMode('worktrees')}>Worktrees</button>
-        <button className={viewMode === 'inbox' ? 'active' : ''} onClick={() => setViewMode('inbox')}>Inbox</button>
       </nav>
 
       {viewMode === 'board' && <section className="idea-panel">
@@ -758,10 +751,6 @@ function App() {
             </ul>
           )}
         </section>
-      )}
-
-      {viewMode === 'inbox' && (
-        <InboxView projects={inboxProjects} token={localToken} onSessionStart={setActiveCard} />
       )}
 
       {docPanelCard && (

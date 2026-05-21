@@ -187,20 +187,6 @@ export async function init(args: string[]): Promise<number> {
     );
   }
 
-  // 4. INBOX.md placeholder (optional — the harness uses it for forward queue + post-archive pruning).
-  const inboxPath = join(cwd, "INBOX.md");
-  if (!existsSync(inboxPath)) {
-    const { writeFile } = await import("node:fs/promises");
-    await writeFile(
-      inboxPath,
-      "# INBOX\n\nForward queue of stories. Add entries under `## Open` with a `**Gating event:**` line each.\n\n## Open\n",
-      "utf8",
-    );
-    process.stdout.write(`  [write] INBOX.md\n`);
-  } else {
-    process.stdout.write(`  [skip] INBOX.md (already exists)\n`);
-  }
-
   process.stdout.write("\nNext steps:\n");
   process.stdout.write(`  1. Edit ${configFile} — set verification commands + tier scope rules.\n`);
   process.stdout.write("  2. Edit openspec/project.md — record architectural invariants.\n");

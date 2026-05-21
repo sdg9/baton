@@ -165,7 +165,7 @@ function escapeRegex(s: string): string {
  * If `proposalImpact` is empty/missing, the detector returns clean — we lack
  * ground truth.
  *
- * BACKLOG: refine this once proposals get a structured `scope` field. Until
+ * Follow-up: refine this once proposals get a structured `scope` field. Until
  * then this detector mostly catches "holdout points at a file the proposal
  * never mentioned," not the deeper "regex too broad" symptom.
  */

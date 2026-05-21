@@ -20,8 +20,6 @@ import { captureTmuxPane, createOrAttachTmuxSession, killTmuxSession } from './s
 import { tmuxHasSession } from './sessions/tmux';
 import { buildStartPrompt } from './prompt';
 import { attachTerminalWebSocket } from './terminal-ws';
-import { findEntry, queryInbox } from './inbox/cache';
-import { startInboxWatcher } from './inbox/watcher';
 import { validateChangeId } from './ideas/drafts';
 
 const root = process.cwd();
@@ -36,7 +34,7 @@ const auth = createAuthMiddleware({ requireAuth: config.security.requireAuth, lo
 
 app.use(express.json());
 app.use((req, res, next) => {
-  if (!req.path.startsWith('/api/sessions') && !req.path.startsWith('/api/terminal') && !req.path.startsWith('/api/ideas') && !req.path.startsWith('/api/merge-plans') && !req.path.startsWith('/api/worktrees') && !req.path.startsWith('/api/archived-changes') && !req.path.includes('/docs') && !req.path.includes('/metadata') && !req.path.includes('/runtime-state') && !req.path.includes('/inbox/start')) {
+  if (!req.path.startsWith('/api/sessions') && !req.path.startsWith('/api/terminal') && !req.path.startsWith('/api/ideas') && !req.path.startsWith('/api/merge-plans') && !req.path.startsWith('/api/worktrees') && !req.path.startsWith('/api/archived-changes') && !req.path.includes('/docs') && !req.path.includes('/metadata') && !req.path.includes('/runtime-state')) {
     next();
     return;
   }
@@ -523,150 +521,6 @@ app.post('/api/sessions/start', async (req, res, next) => {
   }
 });
 
-app.get('/api/projects/:projectId/inbox', (req, res, next) => {
-  try {
-    const project = config.projects.projects.find((p) => p.id === req.params.projectId);
-    if (!project) {
-      res.status(404).json({ error: `Unknown projectId: ${req.params.projectId}` });
-      return;
-    }
-    const modeParam = typeof req.query.mode === 'string' ? req.query.mode : undefined;
-    const result = queryInbox(project.id, {
-      q: typeof req.query.q === 'string' ? req.query.q : undefined,
-      size: typeof req.query.size === 'string' ? req.query.size : undefined,
-      source_file: typeof req.query.source_file === 'string' ? req.query.source_file : undefined,
-      section: typeof req.query.section === 'string' ? req.query.section : undefined,
-      since: typeof req.query.since === 'string' ? req.query.since : undefined,
-      mode: modeParam === 'all' ? 'all' : 'actionable',
-      priority: typeof req.query.priority === 'string' ? req.query.priority : undefined,
-    });
-    res.json(result);
-  } catch (err) {
-    next(err);
-  }
-});
-
-app.post('/api/projects/:projectId/inbox/start', async (req, res, next) => {
-  try {
-    const project = config.projects.projects.find((p) => p.id === req.params.projectId);
-    if (!project) {
-      res.status(404).json({ error: `Unknown projectId: ${req.params.projectId}` });
-      return;
-    }
-    const { source_file, line, profileId: requestedProfileId } = req.body as {
-      source_file: string;
-      line: number;
-      profileId?: string;
-    };
-    if (!source_file || !Number.isInteger(line)) {
-      res.status(400).json({ error: 'source_file and integer line are required' });
-      return;
-    }
-    const entry = findEntry(project.id, source_file, line);
-    if (!entry) {
-      res.status(404).json({ error: `Inbox entry not found: ${source_file}:${line}` });
-      return;
-    }
-
-    const profileId = requestedProfileId || project.defaultAgent;
-    const profile = resolveAgentProfile(config.agents, project, profileId);
-
-    // Derive a candidate changeId from the slug; fall back to prompt-derived if invalid.
-    const slugCandidate = (entry.slug || entry.title)
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/^-+|-+$/g, '')
-      .slice(0, 58);
-    let changeId: string | undefined;
-    try {
-      if (slugCandidate) changeId = validateChangeId(slugCandidate);
-    } catch {
-      changeId = undefined;
-    }
-
-    const promptLines: string[] = [
-      `Promote this Inbox/BACKLOG entry into a new OpenSpec change.`,
-      ``,
-      `Source entry: ${entry.source_file}.md:${entry.line}`,
-      entry.slug ? `Slug: ${entry.slug}` : '',
-      `Title: ${entry.title}`,
-      entry.priority ? `Priority: ${entry.priority}` : '',
-      entry.size ? `Size estimate: ${entry.size}` : '',
-      ``,
-      `Original scope:`,
-      entry.scope || '(no scope captured — read the source MD)',
-      ``,
-      entry.gating ? `Gating event: ${entry.gating}` : '',
-      entry.source ? `Originating source: ${entry.source}` : '',
-      entry.notes ? `Notes: ${entry.notes}` : '',
-      ``,
-      `Read the full entry context at ${entry.source_file}.md:${entry.line} before drafting.`,
-      ``,
-      `Author the proposal using the openspec-propose / opsx:propose skill conventions:`,
-      `- proposal.md (motivation, scope, non-scope, success criteria)`,
-      `- design.md (key decisions, alternatives considered)`,
-      `- specs/ deltas (capability-specific WHEN/THEN scenarios)`,
-      `- tasks.md (atomized, with size estimates)`,
-      ``,
-      `Stop after drafting and wait for review. Do not edit files outside openspec/changes/<changeId>/.`,
-    ];
-    const prompt = promptLines.filter((l) => l !== '' || true).join('\n');
-
-    const draft = await createIdeaDraft({ root, project, changeId, prompt, profileId });
-    worktreeMappingStore.record({
-      projectId: project.id,
-      changeId: draft.changeId,
-      worktreePath: draft.worktreePath,
-      branchName: draft.branchName,
-    });
-
-    const sessionPrompt = [
-      `You are drafting a new OpenSpec change in ${draft.worktreePath}.`,
-      `Change id: ${draft.changeId}`,
-      ``,
-      `Create proposal.md, design.md, tasks.md, and specs under:`,
-      `openspec/changes/${draft.changeId}/`,
-      ``,
-      draft.prompt,
-    ].join('\n');
-
-    const session = await createOrAttachTmuxSession({
-      namePrefix: config.agents.session.namePrefix,
-      projectId: project.id,
-      cardId: `idea-${draft.changeId}`,
-      cwd: draft.worktreePath,
-      command: profile.command,
-      args: profile.args,
-      initialPrompt: sessionPrompt,
-    });
-    sessionStore.upsert({
-      projectId: project.id,
-      cardId: `idea-${draft.changeId}`,
-      profileId,
-      sessionId: session.sessionName,
-      tmuxSessionName: session.sessionName,
-      status: 'running',
-      updatedAt: new Date().toISOString(),
-    });
-    writeAuditEvent(auditPath, 'inbox.session.start', {
-      projectId: project.id,
-      source_file: entry.source_file,
-      line: entry.line,
-      slug: entry.slug,
-      changeId: draft.changeId,
-      profileId,
-      sessionName: session.sessionName,
-    });
-    res.json({ draft, session });
-  } catch (err) {
-    writeAuditEvent(auditPath, 'inbox.session.rejected', {
-      error: err instanceof Error ? err.message : String(err),
-      body: req.body,
-    });
-    next(err);
-  }
-});
-
 attachTerminalWebSocket(server, {
   auditPath,
   authenticate: auth,
@@ -684,8 +538,5 @@ server.listen(port, config.security.bindHost, () => {
   console.log(`Agent Workbench listening on http://${config.security.bindHost}:${port}`);
   for (const item of runDiagnostics(config)) {
     console.log(`${item.ok ? 'ok' : 'warn'} ${item.name}: ${item.detail}`);
-  }
-  for (const project of config.projects.projects) {
-    startInboxWatcher(project.id, project.path);
   }
 });

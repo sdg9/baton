@@ -74,8 +74,8 @@ export interface HarnessModelConfig {
 // The orchestrator (autonomous-harness skill, Phase 4d) picks a profile per
 // story and dispatches only those reviewers. Engine/multiplayer/persistence
 // stories use `default` (4 reviewers); UI/content stories use lighter sets
-// because architect/security findings on UI surface as noise that drains into
-// BACKLOG without ever paying off.
+// because architect/security findings on UI surface as noise that never gets
+// acted on.
 // ---------------------------------------------------------------------------
 
 export type ReviewerName =

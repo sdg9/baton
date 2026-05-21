@@ -207,7 +207,7 @@ Common per-repo customizations:
 │   ├── git-worktree.ts           # worktree create/remove + assertMainClean
 │   ├── holdout-validate.ts       # antipattern static-scan
 │   ├── merge-to-main.ts          # tier-scope guardrail + auto-resolve merge
-│   ├── finish-post-process.ts    # archive post-processor (Purpose seeding, INBOX prune)
+│   ├── finish-post-process.ts    # archive post-processor (Purpose seeding, spec normalization)
 │   ├── review.ts                 # static HTML review page
 │   ├── run-queue.ts              # autopilot multi-story preflight
 │   ├── autopilot-report.ts       # final report writer
