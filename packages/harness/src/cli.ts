@@ -63,9 +63,19 @@ async function runQueueCmd(args: string[]): Promise<number> {
 async function doctorCmd(args: string[]): Promise<number> {
   let cwd = process.cwd();
   let asJson = false;
+  // null = auto (TTY + no NO_COLOR), true/false = explicit override.
+  let colorOverride: boolean | null = null;
   for (const arg of args) {
     if (arg === "--json") {
       asJson = true;
+      continue;
+    }
+    if (arg === "--color") {
+      colorOverride = true;
+      continue;
+    }
+    if (arg === "--no-color") {
+      colorOverride = false;
       continue;
     }
     if (arg.startsWith("--cwd=")) {
@@ -85,9 +95,22 @@ async function doctorCmd(args: string[]): Promise<number> {
   if (asJson) {
     process.stdout.write(`${renderJson(report)}\n`);
   } else {
-    process.stdout.write(`${renderHuman(report)}\n`);
+    const colors = colorOverride ?? shouldUseColors();
+    process.stdout.write(`${renderHuman(report, { colors })}\n`);
   }
   return report.ok ? 0 : 1;
+}
+
+/**
+ * Decide whether to emit ANSI color escapes. Honors the de-facto standards:
+ *   • NO_COLOR (any value) — disable, per https://no-color.org
+ *   • FORCE_COLOR — enable even when not a TTY (e.g. CI logs that render ANSI)
+ *   • otherwise enable only when stdout is a TTY
+ */
+function shouldUseColors(): boolean {
+  if (process.env.NO_COLOR !== undefined && process.env.NO_COLOR !== "") return false;
+  if (process.env.FORCE_COLOR !== undefined && process.env.FORCE_COLOR !== "0") return true;
+  return Boolean(process.stdout.isTTY);
 }
 
 async function getChangedPaths(baseBranch: string, branch: string): Promise<string[]> {
@@ -266,7 +289,7 @@ async function help(_args: string[] = []): Promise<number> {
       "  verify-all                run lint, typecheck, unit, e2e",
       "  verify <kind>             run one of: lint typecheck unit e2e",
       "  diff <story>              print diff of story branch vs base",
-      "  doctor [--json] [--cwd=<path>]",
+      "  doctor [--json] [--cwd=<path>] [--color|--no-color]",
       "                            verify the install: config, openspec, external CLIs, verify cmds",
       "  holdout-check             refuse if uncommitted/staged diff touches a holdout",
       "  holdout-validate <story> [--scope=story|repo]",

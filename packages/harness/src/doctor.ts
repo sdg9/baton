@@ -781,13 +781,20 @@ export function renderJson(report: DoctorReport): string {
   return JSON.stringify(report, null, 2);
 }
 
-export function renderHuman(report: DoctorReport): string {
+export interface RenderHumanOptions {
+  /** Wrap PASS/FAIL/WARN tags in ANSI color codes. Defaults to false so the
+   *  output is byte-identical to non-color callers (tests, file redirects). */
+  colors?: boolean;
+}
+
+export function renderHuman(report: DoctorReport, opts: RenderHumanOptions = {}): string {
+  const colors = opts.colors ?? false;
   const lines: string[] = [];
   lines.push(`baton-harness doctor — ${report.cwd}`);
   lines.push("");
   lines.push("Hard checks");
   for (const c of report.checks.filter((c) => c.tier === "hard")) {
-    lines.push(formatRow(c));
+    lines.push(formatRow(c, colors));
     if (c.hint) lines.push(`        hint: ${c.hint}`);
   }
   const soft = report.checks.filter((c) => c.tier === "soft");
@@ -795,7 +802,7 @@ export function renderHuman(report: DoctorReport): string {
     lines.push("");
     lines.push("Soft checks");
     for (const c of soft) {
-      lines.push(formatRow(c));
+      lines.push(formatRow(c, colors));
       if (c.hint) lines.push(`        hint: ${c.hint}`);
     }
   }
@@ -806,8 +813,29 @@ export function renderHuman(report: DoctorReport): string {
   return lines.join("\n");
 }
 
-function formatRow(c: CheckResult): string {
-  const tag = c.status.toUpperCase().padEnd(4);
+// ANSI SGR codes. Bold is added so a thin font (e.g. iTerm's default) reads
+// clearly on light backgrounds. Reset is the catch-all that closes all attrs.
+const ANSI = {
+  reset: "\x1b[0m",
+  red: "\x1b[1;31m", // FAIL
+  green: "\x1b[1;32m", // PASS
+  yellow: "\x1b[1;33m", // WARN
+} as const;
+
+function colorTag(status: CheckResult["status"], colors: boolean): string {
+  const raw = status.toUpperCase().padEnd(4);
+  if (!colors) return raw;
+  // padEnd is applied BEFORE wrapping so the visible width stays consistent
+  // — ANSI escapes are zero-width to the terminal but count as characters
+  // to JS, so wrapping first would misalign the column.
+  if (status === "pass") return `${ANSI.green}${raw}${ANSI.reset}`;
+  if (status === "fail") return `${ANSI.red}${raw}${ANSI.reset}`;
+  if (status === "warn") return `${ANSI.yellow}${raw}${ANSI.reset}`;
+  return raw;
+}
+
+function formatRow(c: CheckResult, colors: boolean): string {
+  const tag = colorTag(c.status, colors);
   const name = c.name.padEnd(28);
   const detail = c.message ? `  ${c.message}` : "";
   return `  ${tag}  ${name}${detail}`;

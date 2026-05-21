@@ -52,6 +52,40 @@ describe("renderers", () => {
     }
   });
 
+  it("renderHuman emits no ANSI escapes by default (safe for files/CI)", async () => {
+    const dir = makeTempDir();
+    try {
+      const report = await runDoctor(dir);
+      const out = renderHuman(report);
+      // eslint-disable-next-line no-control-regex
+      expect(out).not.toMatch(/\x1b\[/);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("renderHuman wraps PASS/FAIL/WARN tags in ANSI color when colors:true", async () => {
+    const dir = makeTempDir();
+    try {
+      // Bare temp dir → git-repo check FAILs and other hard checks may PASS.
+      // We assert each present status uses its color.
+      const report = await runDoctor(dir);
+      const out = renderHuman(report, { colors: true });
+      const hasFail = report.checks.some((c) => c.status === "fail");
+      const hasPass = report.checks.some((c) => c.status === "pass");
+      const hasWarn = report.checks.some((c) => c.status === "warn");
+      if (hasFail) expect(out).toMatch(/\x1b\[1;31mFAIL\s*\x1b\[0m/);
+      if (hasPass) expect(out).toMatch(/\x1b\[1;32mPASS\s*\x1b\[0m/);
+      if (hasWarn) expect(out).toMatch(/\x1b\[1;33mWARN\s*\x1b\[0m/);
+      // Reset code must close every opened sequence.
+      const opens = (out.match(/\x1b\[1;3[123]m/g) ?? []).length;
+      const closes = (out.match(/\x1b\[0m/g) ?? []).length;
+      expect(closes).toBe(opens);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it("renderJson produces parseable JSON with summary + checks", async () => {
     const dir = makeTempDir();
     try {
