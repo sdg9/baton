@@ -79,6 +79,12 @@ const config: HarnessConfig = {
   fullVerificationTriggers: {
     exactPaths: [
       "harness.config.ts",
+      "harness.config.mts",
+      "harness.config.mjs",
+      "harness.config.js",
+      "harness.config.cjs",
+      "harness.config.jsonc",
+      "harness.config.json",
       "package.json",
       "package-lock.json",
       "tsconfig.json",
