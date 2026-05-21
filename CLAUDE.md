@@ -51,4 +51,3 @@ Note the workbench will *cascade* a patch bump whenever the harness is bumped (b
 - New work goes on a feature branch off `main`, then merges back via `git merge --no-ff`. Direct commits to `main` are reserved for tiny doc/release commits.
 - Commits follow Conventional Commits prefixes: `feat:`, `fix:`, `chore:`, `docs:`, `release:`, etc.
 - Build outputs (`packages/*/dist/`) are gitignored. Don't commit them.
-- The monorepo migration history is documented in `docs/superpowers/plans/2026-05-20-monorepo-migration.md` (historical; uses pre-rename names).
