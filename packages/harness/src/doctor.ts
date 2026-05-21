@@ -257,12 +257,94 @@ async function checkConfigParses(ctx: DoctorContext): Promise<CheckResult> {
   };
 }
 
+async function checkOpenspecDir(ctx: DoctorContext): Promise<CheckResult> {
+  if (ctx.configState.kind !== "ok") {
+    return {
+      name: "openspec-dir",
+      tier: "hard",
+      status: "fail",
+      message: "skipped: config unavailable",
+    };
+  }
+  const { existsSync, statSync } = await import("node:fs");
+  const { resolve } = await import("node:path");
+  const dir = resolve(ctx.cwd, ctx.configState.config.openspecDir);
+  if (!existsSync(dir) || !statSync(dir).isDirectory()) {
+    return {
+      name: "openspec-dir",
+      tier: "hard",
+      status: "fail",
+      message: `${ctx.configState.config.openspecDir}/ not found`,
+      hint: "run `npx -y @baton-tools/harness init`",
+    };
+  }
+  return {
+    name: "openspec-dir",
+    tier: "hard",
+    status: "pass",
+    message: ctx.configState.config.openspecDir,
+  };
+}
+
+async function checkOpenspecProjectMd(ctx: DoctorContext): Promise<CheckResult> {
+  if (ctx.configState.kind !== "ok") {
+    return {
+      name: "openspec-project-md",
+      tier: "hard",
+      status: "fail",
+      message: "skipped: config unavailable",
+    };
+  }
+  const { existsSync } = await import("node:fs");
+  const { resolve } = await import("node:path");
+  const path = resolve(ctx.cwd, ctx.configState.config.openspecDir, "project.md");
+  if (!existsSync(path)) {
+    return {
+      name: "openspec-project-md",
+      tier: "hard",
+      status: "fail",
+      message: `${ctx.configState.config.openspecDir}/project.md not found`,
+      hint: "run `npx -y @baton-tools/harness init`",
+    };
+  }
+  return { name: "openspec-project-md", tier: "hard", status: "pass" };
+}
+
+async function checkOpenspecCli(_ctx: DoctorContext): Promise<CheckResult> {
+  // `npx --no-install` fails (non-zero exit) when the package is neither in
+  // node_modules nor in the npx cache — exactly the signal we want.
+  try {
+    const { stdout } = await execFileAsync(
+      "npx",
+      ["--no-install", "@fission-ai/openspec", "--version"],
+      { timeout: 15_000 },
+    );
+    return {
+      name: "openspec-cli",
+      tier: "hard",
+      status: "pass",
+      message: stdout.trim().split("\n").pop() || "available",
+    };
+  } catch (err) {
+    return {
+      name: "openspec-cli",
+      tier: "hard",
+      status: "fail",
+      message: err instanceof Error ? err.message.split("\n")[0] : String(err),
+      hint: "run `npx -y @fission-ai/openspec --version` once to warm the cache, or `npm i -D @fission-ai/openspec`",
+    };
+  }
+}
+
 const HARD_CHECKS: Check[] = [
   checkGitRepo,
   checkNodeVersion,
   checkGitOnPath,
   checkConfigPresent,
   checkConfigParses,
+  checkOpenspecDir,
+  checkOpenspecProjectMd,
+  checkOpenspecCli,
 ];
 const SOFT_CHECKS: Check[] = [];
 

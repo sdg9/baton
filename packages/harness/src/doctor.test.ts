@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -148,5 +148,66 @@ describe("runDoctor — config checks", () => {
     const report = await runDoctor(dir);
     expect(report.checks.find((c) => c.name === "config-present")?.status).toBe("pass");
     expect(report.checks.find((c) => c.name === "config-parses")?.status).toBe("fail");
+  });
+});
+
+describe("runDoctor — openspec checks", () => {
+  let dir: string;
+
+  beforeEach(() => {
+    dir = makeTempDir();
+    // Every test in this block has a valid config — write it once.
+    writeFileSync(join(dir, "harness.config.json"), VALID_CONFIG_JSON);
+  });
+
+  afterEach(() => {
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it("openspec-dir fails when openspec/ does not exist", async () => {
+    const report = await runDoctor(dir);
+    expect(report.checks.find((c) => c.name === "openspec-dir")?.status).toBe("fail");
+  });
+
+  it("openspec-dir passes when openspec/ exists", async () => {
+    mkdirSync(join(dir, "openspec"));
+    const report = await runDoctor(dir);
+    expect(report.checks.find((c) => c.name === "openspec-dir")?.status).toBe("pass");
+  });
+
+  it("openspec-project-md fails when openspec/ exists but project.md does not", async () => {
+    mkdirSync(join(dir, "openspec"));
+    const report = await runDoctor(dir);
+    expect(report.checks.find((c) => c.name === "openspec-project-md")?.status).toBe("fail");
+  });
+
+  it("openspec-project-md passes when openspec/project.md exists", async () => {
+    mkdirSync(join(dir, "openspec"));
+    writeFileSync(join(dir, "openspec", "project.md"), "# Project\n");
+    const report = await runDoctor(dir);
+    expect(report.checks.find((c) => c.name === "openspec-project-md")?.status).toBe("pass");
+  });
+
+  it("openspec-dir is skipped (fail) when config is unavailable", async () => {
+    rmSync(join(dir, "harness.config.json"));
+    const report = await runDoctor(dir);
+    const check = report.checks.find((c) => c.name === "openspec-dir");
+    expect(check?.status).toBe("fail");
+    expect(check?.message).toMatch(/skipped: config unavailable/i);
+  });
+});
+
+describe("runDoctor — openspec-cli check", () => {
+  it("emits a hard check named 'openspec-cli' with a status of pass, warn, or fail", async () => {
+    const dir = makeTempDir();
+    try {
+      const report = await runDoctor(dir);
+      const cli = report.checks.find((c) => c.name === "openspec-cli");
+      expect(cli).toBeDefined();
+      expect(cli?.tier).toBe("hard");
+      expect(["pass", "warn", "fail"]).toContain(cli?.status);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });
