@@ -51,32 +51,67 @@ export interface WorkbenchConfig {
   security: AgentConfig['security'] & { localToken: string };
 }
 
+export interface LoadWorkbenchConfigResult {
+  config: WorkbenchConfig;
+  defaultedFiles: { agents: boolean; projects: boolean };
+}
+
+export function buildDefaultAgentConfig(): AgentConfig {
+  return {
+    agents: {
+      claude: { label: 'Claude Code', command: 'claude', args: [], allowed: true }
+    },
+    session: {
+      backend: 'tmux',
+      namePrefix: 'baton-workbench',
+      defaultShell: process.env.SHELL && process.env.SHELL.length > 0 ? process.env.SHELL : '/bin/bash',
+      idleNotificationSeconds: 30
+    },
+    security: {
+      bindHost: '127.0.0.1',
+      requireAuth: true,
+      trustedProxy: 'cloudflare-access',
+      auditLog: true
+    }
+  };
+}
+
+export const defaultProjectConfig: ProjectConfigFile = { projects: [] };
+
 function readJson(path: string): unknown {
   return JSON.parse(readFileSync(path, 'utf8'));
 }
 
-function configPath(root: string, fileName: string): string {
-  const local = join(root, 'config', fileName);
-  if (existsSync(local)) return local;
-  return join(root, 'config', fileName.replace('.json', '.example.json'));
-}
+export function loadWorkbenchConfig(root = process.cwd()): LoadWorkbenchConfigResult {
+  const agentsPath = join(root, 'config', 'agents.json');
+  const projectsPath = join(root, 'config', 'projects.json');
 
-export function loadWorkbenchConfig(root = process.cwd()): WorkbenchConfig {
-  const agentsPath = configPath(root, 'agents.json');
-  const projectsPath = configPath(root, 'projects.json');
-  const agents = agentConfigSchema.parse(readJson(agentsPath));
-  const projects = projectConfigSchema.parse(readJson(projectsPath));
+  const agentsExists = existsSync(agentsPath);
+  const projectsExists = existsSync(projectsPath);
+
+  const agents = agentsExists
+    ? agentConfigSchema.parse(readJson(agentsPath))
+    : buildDefaultAgentConfig();
+  const projects = projectsExists
+    ? projectConfigSchema.parse(readJson(projectsPath))
+    : defaultProjectConfig;
 
   if (agents.security.bindHost !== '127.0.0.1' && agents.security.bindHost !== 'localhost') {
     throw new Error(`security.bindHost must be loopback-only, received ${agents.security.bindHost}`);
   }
 
   return {
-    agents,
-    projects,
-    security: {
-      ...agents.security,
-      localToken: process.env.AGENT_WORKBENCH_TOKEN ?? 'local-dev-token'
+    config: {
+      agents,
+      projects,
+      security: {
+        ...agents.security,
+        localToken: process.env.AGENT_WORKBENCH_TOKEN ?? 'local-dev-token'
+      }
+    },
+    defaultedFiles: {
+      agents: !agentsExists,
+      projects: !projectsExists
     }
   };
 }

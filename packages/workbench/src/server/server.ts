@@ -23,7 +23,13 @@ import { attachTerminalWebSocket } from './terminal-ws';
 import { validateChangeId } from './ideas/drafts';
 
 const root = process.cwd();
-const config = loadWorkbenchConfig(root);
+const { config, defaultedFiles } = loadWorkbenchConfig(root);
+if (defaultedFiles.agents) {
+  console.log('[workbench] no config/agents.json — using built-in defaults (claude + tmux + loopback). Write config/agents.json to override.');
+}
+if (defaultedFiles.projects) {
+  console.log('[workbench] no config/projects.json — starting with no projects. Write config/projects.json to add some.');
+}
 const app = express();
 const server = createServer(app);
 const sessionStore = new SessionStore(join(root, '.agent-workbench', 'sessions.json'));
