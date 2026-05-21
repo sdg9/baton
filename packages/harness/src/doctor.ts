@@ -3,6 +3,8 @@ import { readFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
+import type { HarnessConfig } from "./types.js";
+import { HarnessConfigError } from "./types.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -34,12 +36,57 @@ export interface RunDoctorOptions {
 
 // Internal context ----------------------------------------------------------
 
+type ConfigState =
+  | { kind: "ok"; config: HarnessConfig; path: string }
+  | { kind: "missing" }
+  | { kind: "error"; message: string; path: string };
+
 interface DoctorContext {
   cwd: string;
+  configState: ConfigState;
 }
 
 async function buildContext(cwd: string): Promise<DoctorContext> {
-  return { cwd };
+  return { cwd, configState: await resolveConfigState(cwd) };
+}
+
+async function resolveConfigState(cwd: string): Promise<ConfigState> {
+  // We re-implement discovery here instead of importing the private
+  // discoverConfigPath from config-loader.ts. Two reasons: the list is short
+  // (7 names) so duplication cost is tiny, and not importing private symbols
+  // keeps config-loader's surface stable.
+  const filenames = [
+    "harness.config.ts",
+    "harness.config.mts",
+    "harness.config.mjs",
+    "harness.config.js",
+    "harness.config.cjs",
+    "harness.config.jsonc",
+    "harness.config.json",
+  ];
+  const { existsSync } = await import("node:fs");
+  const { resolve } = await import("node:path");
+  let path: string | null = null;
+  for (const name of filenames) {
+    const candidate = resolve(cwd, name);
+    if (existsSync(candidate)) {
+      path = candidate;
+      break;
+    }
+  }
+  if (!path) return { kind: "missing" };
+
+  try {
+    const { loadConfig } = await import("./config-loader.js");
+    const config = await loadConfig(path);
+    return { kind: "ok", config, path };
+  } catch (err) {
+    const message =
+      err instanceof HarnessConfigError || err instanceof Error
+        ? err.message
+        : String(err);
+    return { kind: "error", message, path };
+  }
 }
 
 // Check functions ----------------------------------------------------------
@@ -168,7 +215,55 @@ function compareSemver(a: string, b: string): number {
   return 0;
 }
 
-const HARD_CHECKS: Check[] = [checkGitRepo, checkNodeVersion, checkGitOnPath];
+async function checkConfigPresent(ctx: DoctorContext): Promise<CheckResult> {
+  if (ctx.configState.kind === "missing") {
+    return {
+      name: "config-present",
+      tier: "hard",
+      status: "fail",
+      message: "no harness.config.* found in cwd",
+      hint: "run `npx -y @baton-tools/harness init`",
+    };
+  }
+  // Both "ok" and "error" mean a file exists.
+  const path = ctx.configState.kind === "ok" ? ctx.configState.path : ctx.configState.path;
+  const filename = path.split("/").pop() ?? path;
+  return {
+    name: "config-present",
+    tier: "hard",
+    status: "pass",
+    message: filename,
+  };
+}
+
+async function checkConfigParses(ctx: DoctorContext): Promise<CheckResult> {
+  if (ctx.configState.kind === "ok") {
+    return { name: "config-parses", tier: "hard", status: "pass" };
+  }
+  if (ctx.configState.kind === "missing") {
+    return {
+      name: "config-parses",
+      tier: "hard",
+      status: "fail",
+      message: "skipped: no config file",
+    };
+  }
+  return {
+    name: "config-parses",
+    tier: "hard",
+    status: "fail",
+    message: ctx.configState.message.split("\n")[0],
+    hint: "fix the parse/validation error above",
+  };
+}
+
+const HARD_CHECKS: Check[] = [
+  checkGitRepo,
+  checkNodeVersion,
+  checkGitOnPath,
+  checkConfigPresent,
+  checkConfigParses,
+];
 const SOFT_CHECKS: Check[] = [];
 
 // Orchestrator -------------------------------------------------------------

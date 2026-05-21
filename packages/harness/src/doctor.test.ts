@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -96,5 +96,57 @@ describe("runDoctor — environment checks", () => {
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
+  });
+});
+
+const VALID_CONFIG_JSON = JSON.stringify({
+  openspecDir: "openspec",
+  worktreeDir: ".claude/worktrees",
+  logDir: ".claude/harness-logs",
+  verification: {
+    lint: "echo lint",
+    typecheck: "echo typecheck",
+    unit: "echo unit",
+    e2e: "echo e2e",
+  },
+  holdouts: { paths: ["src/**/*.holdout.test.ts"], markerComment: "// @openspec-holdout" },
+  iteration: { maxAttempts: 3 },
+  git: { baseBranch: "main", branchPrefix: "story/", forbidPushToBase: true, blockNoVerify: true },
+  tierScopeRules: {},
+  fullVerificationTriggers: { exactPaths: [], prefixes: [] },
+});
+
+describe("runDoctor — config checks", () => {
+  let dir: string;
+
+  beforeEach(() => {
+    dir = makeTempDir();
+  });
+
+  afterEach(() => {
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it("emits config-present fail and config-parses fail (skipped) when no config exists", async () => {
+    const report = await runDoctor(dir);
+    const present = report.checks.find((c) => c.name === "config-present");
+    const parses = report.checks.find((c) => c.name === "config-parses");
+    expect(present?.status).toBe("fail");
+    expect(parses?.status).toBe("fail");
+    expect(parses?.message).toMatch(/no config file/i);
+  });
+
+  it("emits both passes when a valid harness.config.json is present", async () => {
+    writeFileSync(join(dir, "harness.config.json"), VALID_CONFIG_JSON);
+    const report = await runDoctor(dir);
+    expect(report.checks.find((c) => c.name === "config-present")?.status).toBe("pass");
+    expect(report.checks.find((c) => c.name === "config-parses")?.status).toBe("pass");
+  });
+
+  it("emits config-present pass but config-parses fail when the file is malformed", async () => {
+    writeFileSync(join(dir, "harness.config.json"), "{ this is not valid json");
+    const report = await runDoctor(dir);
+    expect(report.checks.find((c) => c.name === "config-present")?.status).toBe("pass");
+    expect(report.checks.find((c) => c.name === "config-parses")?.status).toBe("fail");
   });
 });
