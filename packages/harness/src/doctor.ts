@@ -1,4 +1,7 @@
 import { execFile } from "node:child_process";
+import { readFile } from "node:fs/promises";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 
 const execFileAsync = promisify(execFile);
@@ -71,7 +74,101 @@ async function checkGitRepo(ctx: DoctorContext): Promise<CheckResult> {
   }
 }
 
-const HARD_CHECKS: Check[] = [checkGitRepo];
+async function checkNodeVersion(_ctx: DoctorContext): Promise<CheckResult> {
+  // Read the engines.node floor from this package's own package.json.
+  // `import.meta.url` resolves to dist/doctor.js when published, src/doctor.ts
+  // when running via tsx; in both cases the package.json is one or two levels
+  // up. Walk a small fixed number of levels to find it.
+  const here = dirname(fileURLToPath(import.meta.url));
+  let pkgPath: string | null = null;
+  let dir = here;
+  for (let i = 0; i < 4; i++) {
+    const candidate = resolve(dir, "package.json");
+    try {
+      const text = await readFile(candidate, "utf8");
+      const parsed = JSON.parse(text) as {
+        name?: string;
+        engines?: { node?: string };
+      };
+      if (parsed.name === "@baton-tools/harness") {
+        pkgPath = candidate;
+        break;
+      }
+    } catch {
+      // not a package.json, or wrong package — keep walking
+    }
+    dir = dirname(dir);
+  }
+
+  const running = process.versions.node;
+  if (!pkgPath) {
+    // Engine metadata unavailable — still report the running version, but
+    // can't check the floor.
+    return {
+      name: "node-version",
+      tier: "hard",
+      status: "pass",
+      message: `${running} (engines.node unavailable — could not locate @baton-tools/harness package.json)`,
+    };
+  }
+
+  const text = await readFile(pkgPath, "utf8");
+  const parsed = JSON.parse(text) as { engines?: { node?: string } };
+  const floor = parsed.engines?.node ?? ">=0.0.0";
+  const required = floor.replace(/^>=\s*/, "").trim();
+
+  if (compareSemver(running, required) >= 0) {
+    return {
+      name: "node-version",
+      tier: "hard",
+      status: "pass",
+      message: `${running} (>= ${required})`,
+    };
+  }
+  return {
+    name: "node-version",
+    tier: "hard",
+    status: "fail",
+    message: `${running} (< ${required})`,
+    hint: `upgrade node to >= ${required}`,
+  };
+}
+
+async function checkGitOnPath(_ctx: DoctorContext): Promise<CheckResult> {
+  try {
+    const { stdout } = await execFileAsync("git", ["--version"]);
+    return {
+      name: "git-on-path",
+      tier: "hard",
+      status: "pass",
+      message: stdout.trim(),
+    };
+  } catch (err) {
+    return {
+      name: "git-on-path",
+      tier: "hard",
+      status: "fail",
+      message: err instanceof Error ? err.message.split("\n")[0] : String(err),
+      hint: "install git",
+    };
+  }
+}
+
+// Tiny semver comparator: returns -1/0/1 for a vs b.
+// Handles the "X.Y.Z" shape we get from `process.versions.node` and engines.
+function compareSemver(a: string, b: string): number {
+  const pa = a.split(".").map((n) => parseInt(n, 10));
+  const pb = b.split(".").map((n) => parseInt(n, 10));
+  for (let i = 0; i < 3; i++) {
+    const ai = pa[i] ?? 0;
+    const bi = pb[i] ?? 0;
+    if (ai > bi) return 1;
+    if (ai < bi) return -1;
+  }
+  return 0;
+}
+
+const HARD_CHECKS: Check[] = [checkGitRepo, checkNodeVersion, checkGitOnPath];
 const SOFT_CHECKS: Check[] = [];
 
 // Orchestrator -------------------------------------------------------------

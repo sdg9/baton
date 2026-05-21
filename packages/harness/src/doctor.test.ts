@@ -65,3 +65,36 @@ describe("renderers", () => {
     }
   });
 });
+
+describe("runDoctor — environment checks", () => {
+  it("emits a pass result for node-version on a supported runtime", async () => {
+    const dir = makeTempDir();
+    try {
+      const report = await runDoctor(dir);
+      const node = report.checks.find((c) => c.name === "node-version");
+      expect(node).toBeDefined();
+      expect(node?.tier).toBe("hard");
+      // We assume the host running tests has node >=18.17.0 (the engines floor).
+      // If the floor changes, update this expectation.
+      expect(node?.status).toBe("pass");
+      expect(node?.message).toMatch(/\d+\.\d+\.\d+/);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("emits a pass result for git-on-path when git is installed", async () => {
+    const dir = makeTempDir();
+    try {
+      const report = await runDoctor(dir);
+      const git = report.checks.find((c) => c.name === "git-on-path");
+      expect(git).toBeDefined();
+      expect(git?.tier).toBe("hard");
+      // CI hosts and dev machines invariably have git on PATH.
+      expect(git?.status).toBe("pass");
+      expect(git?.message).toMatch(/git version/i);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
