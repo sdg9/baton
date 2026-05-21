@@ -1,6 +1,6 @@
 {
   "name": "baton-harness",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Spec-driven autonomous-development harness: OpenSpec proposals → frozen holdout contracts → tier-aware adversarial review.",
   "author": {
     "name": "Steven Goff"

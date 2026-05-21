@@ -1,5 +1,11 @@
 # @baton-tools/harness
 
+## 0.4.0
+
+### Minor Changes
+
+- Add a `/polish-proposal <change-name>` slash command that drives up to 3 rounds of review → triage → apply on an OpenSpec change directory. Minor edits on a narrow whitelist (typos, missing required sections, heading-order, intra-doc references, placeholder fill-in, terminology consistency) auto-apply with one git commit per round so any round can be reverted; critical or off-whitelist findings escalate to the user in-chat with a recommended answer pre-filled. Edits are bounded to `openspec/changes/<name>/`; every round appends to `polish-log.md` for an auditable convergence trail. Sister to `/openspec-propose` — that one creates the input, this one polishes it before `/harness` picks it up for implementation.
+
 ## 0.3.0
 
 ### Minor Changes

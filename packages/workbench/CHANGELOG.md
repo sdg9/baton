@@ -1,5 +1,12 @@
 # @baton-tools/workbench
 
+## 1.3.1
+
+### Patch Changes
+
+- Updated dependencies
+  - @baton-tools/harness@0.4.0
+
 ## 1.3.0
 
 ### Minor Changes

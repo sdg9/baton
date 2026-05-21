@@ -8,7 +8,7 @@ The user has merged story `$ARGUMENTS` into the base branch and wants to clean u
 Run:
 
 ```sh
-npx -y -p @baton-tools/harness@0.3.0 baton-harness finish $ARGUMENTS
+npx -y -p @baton-tools/harness@0.4.0 baton-harness finish $ARGUMENTS
 ```
 
 The command refuses if the branch isn't merged into the base, so it's safe to run reflexively. Report the output (archived path, removed worktree, deleted branch). If it fails because the branch isn't merged, tell the user and stop — do not attempt to merge for them.

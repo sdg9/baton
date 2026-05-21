@@ -14,7 +14,7 @@ You are the orchestrator. The human refined and approved the spec; you implement
 Every CLI call in this skill is written as the full npx form:
 
 ```sh
-npx -y -p @baton-tools/harness@0.3.0 baton-harness <subcommand> [args]
+npx -y -p @baton-tools/harness@0.4.0 baton-harness <subcommand> [args]
 ```
 
 This works whether or not the consuming repo has `@baton-tools/harness` installed locally — `npx` will use the local `node_modules` copy if present, otherwise fetch the pinned version into the per-user cache (`~/.npm/_npx/`). The version pin (`@0.1.0`) is rewritten by `scripts/sync-plugin-version.mjs` at every release so this skill and the published CLI always match.
@@ -84,7 +84,7 @@ Tier overrides any `reviewProfile` selection: when tier is `content` or `infra`,
 ## Preconditions — verify before starting
 
 1. A story name was given (or ask for it once).
-2. Run `npx -y -p @baton-tools/harness@0.3.0 baton-harness status <story>`.
+2. Run `npx -y -p @baton-tools/harness@0.4.0 baton-harness status <story>`.
    - The JSON output tells you paths, holdout globs, branch name, max attempts.
    - Exit code 1 means the `approved` sentinel is missing — STOP and ask the user to approve or refine the spec.
 3. Working tree on the base branch is clean. If not, stop and ask.
@@ -99,13 +99,13 @@ If the answer is **yes**, the scenario is implementation-shape-flavored and will
 
 ## Phase 1 — Create worktree
 
-`npx -y -p @baton-tools/harness@0.3.0 baton-harness worktree-create <story>` → JSON with `path` and `branch`.
+`npx -y -p @baton-tools/harness@0.4.0 baton-harness worktree-create <story>` → JSON with `path` and `branch`.
 
 From here on, **every `cd` and Bash `cwd` must be the worktree path**. The main checkout is not touched.
 
 **Anti-pattern — never do this:** to compare your worktree's verify output against the base branch's "baseline," do **not** `git stash; git checkout <base>` against the main repo cwd. Use read-only inspection instead: `git diff <base> -- <files>`, `git show <base>:<file>`. If you genuinely need to run verify against the base, do it in a *throwaway* worktree (`git worktree add /tmp/verify-baseline <base>`).
 
-Record an event: `npx -y -p @baton-tools/harness@0.3.0 baton-harness log-event <story> '{"phase":"start"}'`
+Record an event: `npx -y -p @baton-tools/harness@0.4.0 baton-harness log-event <story> '{"phase":"start"}'`
 
 ## Phase 2 — Generate frozen holdouts
 
@@ -147,12 +147,12 @@ git -C <worktree> commit -m "holdouts(<story>): frozen spec-derived tests"
 
 The commit message MUST begin with `holdouts(` — the pre-commit hook uses that prefix to allow writing holdout files.
 
-Run `npx -y -p @baton-tools/harness@0.3.0 baton-harness verify unit` — holdouts should **FAIL** (RED). If they pass, the subagent didn't do its job; retry once.
+Run `npx -y -p @baton-tools/harness@0.4.0 baton-harness verify unit` — holdouts should **FAIL** (RED). If they pass, the subagent didn't do its job; retry once.
 
 **Antipattern validator (primitives only):**
 
 ```sh
-npx -y -p @baton-tools/harness@0.3.0 baton-harness holdout-validate <story> --scope=story
+npx -y -p @baton-tools/harness@0.4.0 baton-harness holdout-validate <story> --scope=story
 ```
 
 Non-zero means regenerate the offending file(s) before proceeding.
@@ -188,13 +188,13 @@ Implementer subagents sometimes stall at the 600s stream watchdog. Before re-dis
 
 ### 4b. Verify
 
-Run (Bash, cwd = worktree): `npx -y -p @baton-tools/harness@0.3.0 baton-harness verify-all`.
+Run (Bash, cwd = worktree): `npx -y -p @baton-tools/harness@0.4.0 baton-harness verify-all`.
 
 Always log `{"phase":"verify","attempt":N,"passed":true|false}`. On pass, continue to 4c. On fail, capture the stdout, feed it into the next attempt's feedback, continue the loop.
 
 ### 4c. Holdout tamper check
 
-Run `npx -y -p @baton-tools/harness@0.3.0 baton-harness holdout-check` from the worktree. Non-zero means the implementer touched a holdout; treat as a blocker.
+Run `npx -y -p @baton-tools/harness@0.4.0 baton-harness holdout-check` from the worktree. Non-zero means the implementer touched a holdout; treat as a blocker.
 
 ### 4d. Adversarial review
 
@@ -216,7 +216,7 @@ Reviewer-name → subagent_type mapping (these are bundled with this plugin unde
 Dispatch all profile reviewers as **Task calls in a single message** (parallel). Each reviewer receives only:
 
 - The proposal + full specs.
-- The diff (`npx -y -p @baton-tools/harness@0.3.0 baton-harness diff <story>`).
+- The diff (`npx -y -p @baton-tools/harness@0.4.0 baton-harness diff <story>`).
 - An instruction to emit findings as JSON lines: `{"severity":"info|warn|block","category":"...","message":"...","file":"...","line":N}`. Severity `block` ONLY for: spec deviation, security flaws, broken invariants, correctness bugs, missing test coverage for new behavior.
 
 **Instrumentation (required):** before fan-out, write each reviewer's prompt to `.claude/reviewer-prompts/<story>/<attempt>-<reviewer>.md`; after return, write raw output to `.claude/reviewer-outputs/<story>/<attempt>-<reviewer>.md`. Log dispatch + return events.
@@ -229,7 +229,7 @@ Parse findings. If any `block` findings exist, feed them into the next attempt's
 
 If verify passed, holdouts clean, no blocking findings:
 
-- `npx -y -p @baton-tools/harness@0.3.0 baton-harness result <story>` (optionally piping a custom body via stdin).
+- `npx -y -p @baton-tools/harness@0.4.0 baton-harness result <story>` (optionally piping a custom body via stdin).
 - **Write `review-summary.json` in the worktree root**:
 
   ```json
@@ -244,7 +244,7 @@ If verify passed, holdouts clean, no blocking findings:
   ```
 
 - Log `{"phase":"done","attempt":N}`.
-- Report to the user: branch name, attempt count, pointer to `npx -y -p @baton-tools/harness@0.3.0 baton-harness review <story>` for the HTML review page.
+- Report to the user: branch name, attempt count, pointer to `npx -y -p @baton-tools/harness@0.4.0 baton-harness review <story>` for the HTML review page.
 - **Stop.** Do not open a PR. Do not push. The human does that.
 
 ### 4f. Cap exceeded
@@ -252,7 +252,7 @@ If verify passed, holdouts clean, no blocking findings:
 After `maxAttempts` without passing:
 
 - Compose a HANDOFF body summarizing attempts, last 3 failure modes, what was tried, what remains unclear.
-- Pipe it into `npx -y -p @baton-tools/harness@0.3.0 baton-harness handoff <story>`.
+- Pipe it into `npx -y -p @baton-tools/harness@0.4.0 baton-harness handoff <story>`.
 - Log `{"phase":"escalated","attempt":maxAttempts}`.
 
 ## Invariants (non-negotiable)
@@ -285,7 +285,7 @@ Default `models` (override per repo in `harness.config.ts`):
 When the user says *"finish story X"* (after the branch is merged), run:
 
 ```sh
-npx -y -p @baton-tools/harness@0.3.0 baton-harness finish <story>
+npx -y -p @baton-tools/harness@0.4.0 baton-harness finish <story>
 ```
 
 This archives the spec, removes the worktree, and deletes the local branch. The command refuses if the branch isn't merged into the base.
