@@ -405,3 +405,88 @@ describe("runDoctor — soft env/plugin checks", () => {
     }
   });
 });
+
+describe("runDoctor — integration", () => {
+  it("healthy scaffold: every hard check passes", async () => {
+    const dir = makeTempDir();
+    try {
+      execFileSync("git", ["init", "--quiet"], { cwd: dir });
+      writeFileSync(join(dir, "harness.config.json"), VALID_CONFIG_JSON);
+      mkdirSync(join(dir, "openspec"));
+      writeFileSync(join(dir, ".gitignore"), ".claude/worktrees/\n.claude/harness-logs/\n");
+      writeFileSync(join(dir, "openspec", "project.md"), "# Project\n");
+      mkdirSync(join(dir, ".githooks"));
+      writeFileSync(join(dir, ".githooks", "commit-msg"), "#!/bin/sh\n", { mode: 0o755 });
+      execFileSync("git", ["config", "--local", "core.hooksPath", ".githooks"], { cwd: dir });
+
+      // Override the config's verify commands to use `node` (always on PATH).
+      const cfg = JSON.parse(VALID_CONFIG_JSON);
+      cfg.verification = {
+        lint: "node --version",
+        typecheck: "node --version",
+        unit: "node --version",
+        e2e: "node --version",
+      };
+      writeFileSync(join(dir, "harness.config.json"), JSON.stringify(cfg));
+
+      const report = await runDoctor(dir);
+      const hardFails = report.checks.filter((c) => c.tier === "hard" && c.status === "fail");
+      // openspec-cli may legitimately fail in CI if @fission-ai/openspec isn't
+      // in the npx cache. Allow that single check to fail without breaking
+      // the test (it's still a real signal in practice).
+      const acceptableFails = hardFails.filter((c) => c.name !== "openspec-cli");
+      expect(acceptableFails).toHaveLength(0);
+      // Soft checks may legitimately warn (no Claude Code on CI hosts).
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("broken scaffold: expected hard fails, JSON shape is stable", async () => {
+    const dir = makeTempDir();
+    try {
+      // Empty dir: no git, no config, no openspec.
+      const report = await runDoctor(dir);
+      const failNames = report.checks.filter((c) => c.status === "fail").map((c) => c.name);
+      expect(failNames).toContain("git-repo");
+      expect(failNames).toContain("config-present");
+      expect(failNames).toContain("config-parses");
+      expect(failNames).toContain("openspec-dir");
+      expect(failNames).toContain("openspec-project-md");
+
+      // JSON shape: every expected check name is present, exactly once.
+      const json = JSON.parse(renderJson(report));
+      const names = (json.checks as Array<{ name: string }>).map((c) => c.name);
+      const expectedHard = [
+        "git-repo",
+        "node-version",
+        "git-on-path",
+        "config-present",
+        "config-parses",
+        "openspec-dir",
+        "openspec-project-md",
+        "openspec-cli",
+        "verify-lint",
+        "verify-typecheck",
+        "verify-unit",
+        "verify-e2e",
+      ];
+      const expectedSoft = [
+        "git-hook",
+        "gitignore-worktree",
+        "gitignore-logs",
+        "claude-on-path",
+        "plugin-installed",
+        "superpowers-installed",
+      ];
+      for (const name of [...expectedHard, ...expectedSoft]) {
+        expect(names.filter((n) => n === name)).toHaveLength(1);
+      }
+      // version-drift not emitted (no local install in tmp dir).
+      expect(names).not.toContain("version-drift");
+      expect(report.ok).toBe(false);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
