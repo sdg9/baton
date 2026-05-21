@@ -1,5 +1,5 @@
-import { existsSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { existsSync, readFileSync, statSync } from 'node:fs';
+import { basename, join } from 'node:path';
 import { z } from 'zod';
 
 const agentProfileSchema = z.object({
@@ -54,6 +54,7 @@ export interface WorkbenchConfig {
 export interface LoadWorkbenchConfigResult {
   config: WorkbenchConfig;
   defaultedFiles: { agents: boolean; projects: boolean };
+  cwdAutoRegisteredAsProject: boolean;
 }
 
 export function buildDefaultAgentConfig(): AgentConfig {
@@ -76,7 +77,32 @@ export function buildDefaultAgentConfig(): AgentConfig {
   };
 }
 
-export const defaultProjectConfig: ProjectConfigFile = { projects: [] };
+function isOpenspecDir(path: string): boolean {
+  try {
+    return statSync(path).isDirectory();
+  } catch {
+    return false;
+  }
+}
+
+export function buildDefaultProjectConfig(cwd: string): ProjectConfigFile {
+  if (!isOpenspecDir(join(cwd, 'openspec'))) return { projects: [] };
+  const name = basename(cwd) || 'project';
+  return {
+    projects: [{
+      id: name,
+      name,
+      path: cwd,
+      adapter: 'openspec',
+      defaultAgent: 'claude',
+      allowedAgents: ['claude'],
+      openspec: {
+        listCommand: 'openspec list --json',
+        validateCommand: 'openspec validate --strict'
+      }
+    }]
+  };
+}
 
 function readJson(path: string): unknown {
   return JSON.parse(readFileSync(path, 'utf8'));
@@ -94,7 +120,7 @@ export function loadWorkbenchConfig(root = process.cwd()): LoadWorkbenchConfigRe
     : buildDefaultAgentConfig();
   const projects = projectsExists
     ? projectConfigSchema.parse(readJson(projectsPath))
-    : defaultProjectConfig;
+    : buildDefaultProjectConfig(root);
 
   if (agents.security.bindHost !== '127.0.0.1' && agents.security.bindHost !== 'localhost') {
     throw new Error(`security.bindHost must be loopback-only, received ${agents.security.bindHost}`);
@@ -112,7 +138,8 @@ export function loadWorkbenchConfig(root = process.cwd()): LoadWorkbenchConfigRe
     defaultedFiles: {
       agents: !agentsExists,
       projects: !projectsExists
-    }
+    },
+    cwdAutoRegisteredAsProject: !projectsExists && projects.projects.length > 0
   };
 }
 

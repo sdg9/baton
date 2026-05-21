@@ -6,9 +6,10 @@ import { loadWorkbenchConfig } from './config';
 test('falls back to built-in defaults when no config files are present', () => {
   const root = mkdtempSync(join(tmpdir(), 'workbench-defaults-'));
 
-  const { config, defaultedFiles } = loadWorkbenchConfig(root);
+  const { config, defaultedFiles, cwdAutoRegisteredAsProject } = loadWorkbenchConfig(root);
 
   expect(defaultedFiles).toEqual({ agents: true, projects: true });
+  expect(cwdAutoRegisteredAsProject).toBe(false);
   expect(config.security.bindHost).toBe('127.0.0.1');
   expect(config.security.requireAuth).toBe(true);
   expect(config.agents.session.backend).toBe('tmux');
@@ -16,6 +17,46 @@ test('falls back to built-in defaults when no config files are present', () => {
   expect(Object.keys(config.agents.agents)).toEqual(['claude']);
   expect(config.agents.agents.claude.command).toBe('claude');
   expect(config.agents.agents.claude.args).toEqual([]);
+  expect(config.projects.projects).toEqual([]);
+});
+
+test('auto-registers cwd as a project when openspec/ exists and no projects.json', () => {
+  const root = mkdtempSync(join(tmpdir(), 'workbench-autoreg-'));
+  mkdirSync(join(root, 'openspec'));
+
+  const { config, defaultedFiles, cwdAutoRegisteredAsProject } = loadWorkbenchConfig(root);
+
+  expect(defaultedFiles.projects).toBe(true);
+  expect(cwdAutoRegisteredAsProject).toBe(true);
+  expect(config.projects.projects).toHaveLength(1);
+  const project = config.projects.projects[0];
+  expect(project.path).toBe(root);
+  expect(project.adapter).toBe('openspec');
+  expect(project.defaultAgent).toBe('claude');
+  expect(project.allowedAgents).toEqual(['claude']);
+  expect(project.openspec.listCommand).toBe('openspec list --json');
+});
+
+test('does not auto-register when openspec/ is a file rather than a directory', () => {
+  const root = mkdtempSync(join(tmpdir(), 'workbench-noautoreg-'));
+  writeFileSync(join(root, 'openspec'), 'not a directory');
+
+  const { config, cwdAutoRegisteredAsProject } = loadWorkbenchConfig(root);
+
+  expect(cwdAutoRegisteredAsProject).toBe(false);
+  expect(config.projects.projects).toEqual([]);
+});
+
+test('user-provided projects.json wins over cwd auto-detection', () => {
+  const root = mkdtempSync(join(tmpdir(), 'workbench-userwins-'));
+  mkdirSync(join(root, 'openspec'));
+  mkdirSync(join(root, 'config'));
+  writeFileSync(join(root, 'config', 'projects.json'), JSON.stringify({ projects: [] }));
+
+  const { config, cwdAutoRegisteredAsProject, defaultedFiles } = loadWorkbenchConfig(root);
+
+  expect(defaultedFiles.projects).toBe(false);
+  expect(cwdAutoRegisteredAsProject).toBe(false);
   expect(config.projects.projects).toEqual([]);
 });
 

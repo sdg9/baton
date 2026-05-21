@@ -25,12 +25,16 @@ import { attachTerminalWebSocket } from './terminal-ws';
 import { validateChangeId } from './ideas/drafts';
 
 const root = process.cwd();
-const { config, defaultedFiles } = loadWorkbenchConfig(root);
+const { config, defaultedFiles, cwdAutoRegisteredAsProject } = loadWorkbenchConfig(root);
 if (defaultedFiles.agents) {
   console.log('[workbench] no config/agents.json — using built-in defaults (claude + tmux + loopback). Write config/agents.json to override.');
 }
 if (defaultedFiles.projects) {
-  console.log('[workbench] no config/projects.json — starting with no projects. Write config/projects.json to add some.');
+  if (cwdAutoRegisteredAsProject) {
+    console.log(`[workbench] no config/projects.json — auto-registered current dir as a project (found openspec/ in ${root}). Write config/projects.json to override.`);
+  } else {
+    console.log(`[workbench] no config/projects.json and no openspec/ in ${root} — board will be empty. Add an openspec/ directory or write config/projects.json.`);
+  }
 }
 const app = express();
 const server = createServer(app);
